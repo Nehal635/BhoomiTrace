@@ -7,18 +7,21 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [baseMapType, setBaseMapType] = useState('satellite');
   
+  // Modal state
+  const [selectedParcel, setSelectedParcel] = useState(null);
+  const [resolutionAction, setResolutionAction] = useState('TRIM_OVERLAP_BOUNDARY');
+  const [auditNotes, setAuditNotes] = useState('Ground survey matched cadastral markers. Boundary overlap clipped.');
+
   const mapRef = useRef(null);
   const tileLayerRef = useRef(null);
   const cadastralLayerRef = useRef(null);
   const aiFootprintLayerRef = useRef(null);
 
-  // Basemap tile providers
   const baseMaps = {
     osm: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
   };
 
-  // Mock GeoAI Extracted Drone Footprint (Step 3 feature)
   const aiFootprints = {
     type: "FeatureCollection",
     features: [
@@ -39,7 +42,6 @@ function App() {
       setParcels(res.data.features || []);
 
       if (mapRef.current) {
-        // Render Cadastral Layer
         if (cadastralLayerRef.current) mapRef.current.removeLayer(cadastralLayerRef.current);
         cadastralLayerRef.current = L.geoJSON(res.data, {
           style: (feature) => ({
@@ -57,7 +59,6 @@ function App() {
           }
         }).addTo(mapRef.current);
 
-        // Render GeoAI Vector Layer (Cyan Dashed)
         if (!aiFootprintLayerRef.current) {
           aiFootprintLayerRef.current = L.geoJSON(aiFootprints, {
             style: { color: '#06b6d4', weight: 2, dashArray: '5, 5', fillOpacity: 0.2 }
@@ -94,21 +95,31 @@ function App() {
     }
   };
 
-  const handleResolve = async (parcelId, owner) => {
+  const submitResolution = async () => {
+    if (!selectedParcel) return;
     try {
       await axios.post('http://localhost:8000/api/v1/conflicts/resolve', {
-        parcel_id: parcelId,
-        approved_owner: owner,
-        resolution_action: "VERIFIED_BY_OFFICIAL",
-        audit_notes: "Approved via BhoomiTrace WebGIS verification portal."
+        parcel_id: selectedParcel.properties.parcel_id,
+        approved_owner: selectedParcel.properties.owner_name,
+        resolution_action: resolutionAction,
+        audit_notes: auditNotes
       });
+      setSelectedParcel(null);
       fetchParcels();
     } catch (err) {
-      alert("Resolution failed: " + err.message);
+      alert("Resolution error: " + err.message);
     }
   };
 
-  // Export Harmonized GeoJSON (Step 7)
+  const handleResetDemo = async () => {
+    try {
+      await axios.post('http://localhost:8000/api/v1/harmonize/reset');
+      fetchParcels();
+    } catch (err) {
+      alert("Reset failed: " + err.message);
+    }
+  };
+
   const exportGeoJSON = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(parcels, null, 2));
     const downloadAnchor = document.createElement('a');
@@ -133,6 +144,9 @@ function App() {
           <button onClick={() => switchBasemap(baseMapType === 'satellite' ? 'osm' : 'satellite')} style={{ background: '#475569', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer' }}>
             Mode: {baseMapType === 'satellite' ? '🛰️ Satellite' : '🗺️ Map'}
           </button>
+          <button onClick={handleResetDemo} style={{ background: '#f59e0b', color: '#0f172a', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+            🔄 Reset Demo
+          </button>
           <button onClick={exportGeoJSON} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
             📥 Export GeoJSON
           </button>
@@ -154,7 +168,7 @@ function App() {
           <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#f87171' }}>705.81 m²</div>
         </div>
         <div style={{ background: '#1e293b', padding: '12px 16px', borderRadius: '6px', borderLeft: '4px solid #a855f7' }}>
-          <small style={{ color: '#94a3b8' }}>GeoAI INTEGRATION</small>
+          <small style={{ color: '#94a3b8' }}>GeoAI ENGINE</small>
           <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c084fc' }}>Active (U-Net)</div>
         </div>
       </div>
@@ -192,16 +206,64 @@ function App() {
               <div style={{ fontSize: '12px', color: '#94a3b8' }}>Confidence: <b>{p.properties.confidence_score}</b></div>
               {p.properties.status === 'PENDING_REVIEW' && (
                 <button
-                  onClick={() => handleResolve(p.properties.parcel_id, p.properties.owner_name)}
-                  style={{ marginTop: '8px', background: '#dc2626', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', width: '100%' }}
+                  onClick={() => setSelectedParcel(p)}
+                  style={{ marginTop: '8px', background: '#dc2626', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', width: '100%', fontWeight: 'bold' }}
                 >
-                  Resolve & Commit
+                  ⚖️ Audit & Resolve Conflict
                 </button>
               )}
             </div>
           ))}
         </div>
       </div>
+
+      {/* Official Audit Resolution Modal */}
+      {selectedParcel && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ background: '#1e293b', border: '1px solid #475569', borderRadius: '8px', padding: '24px', width: '480px', maxWidth: '90%' }}>
+            <h3 style={{ margin: '0 0 16px', color: '#38bdf8' }}>Official Conflict Adjudication Panel</h3>
+            <p style={{ fontSize: '13px', color: '#cbd5e1' }}>
+              Resolving parcel <b>{selectedParcel.properties.parcel_id}</b> (Owner: {selectedParcel.properties.owner_name})
+            </p>
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>Adjudication Action</label>
+              <select
+                value={resolutionAction}
+                onChange={(e) => setResolutionAction(e.target.value)}
+                style={{ width: '100%', padding: '8px', background: '#0f172a', border: '1px solid #475569', color: '#fff', borderRadius: '4px' }}
+              >
+                <option value="TRIM_OVERLAP_BOUNDARY">Trim Boundary to Legal Cadastral Line</option>
+                <option value="ACCEPT_DRONE_SURVEY">Accept Newly Extracted Drone Footprint</option>
+                <option value="CORRECT_REVENUE_NAME">Update Municipal Record Spelling Typo</option>
+                <option value="SCHEDULE_FIELD_INSPECTION">Dispatch Surveyor for Ground Inspection</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>Official Audit Remark</label>
+              <textarea
+                rows="3"
+                value={auditNotes}
+                onChange={(e) => setAuditNotes(e.target.value)}
+                style={{ width: '100%', padding: '8px', background: '#0f172a', border: '1px solid #475569', color: '#fff', borderRadius: '4px', boxSizing: 'border-box' }}
+              ></textarea>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                onClick={() => setSelectedParcel(null)}
+                style={{ background: '#475569', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitResolution}
+                style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                Commit Decision
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

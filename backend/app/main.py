@@ -19,11 +19,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Root directory of the repository
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path("C:/Users/NEHAL/BhoomiTrace")
 GEOJSON_PATH = BASE_DIR / "sample_data" / "cadastral_legacy.geojson"
 
-# In-memory store for prototype demonstration
 DATA_STORE = {
     "records": run_harmonization()
 }
@@ -42,6 +40,16 @@ def root():
 def health():
     return {"status": "healthy"}
 
+@app.post("/api/v1/harmonize/reset")
+def reset_demo():
+    """Resets the in-memory data store to initial conflicting test state."""
+    DATA_STORE["records"] = run_harmonization()
+    return {
+        "status": "success",
+        "message": "Demo reset to conflict state.",
+        "records": DATA_STORE["records"]
+    }
+
 @app.post("/api/v1/harmonize/run")
 def trigger_harmonization():
     DATA_STORE["records"] = run_harmonization()
@@ -53,9 +61,7 @@ def trigger_harmonization():
 
 @app.get("/api/v1/parcels/geojson")
 def get_parcels_geojson():
-    """Returns GeoJSON formatted parcels with conflict styling for WebGIS map layers."""
     try:
-        # Use utf-8-sig to automatically handle Windows PowerShell UTF-8 BOM headers
         with open(GEOJSON_PATH, "r", encoding="utf-8-sig") as f:
             geojson_data = json.load(f)
 
@@ -66,7 +72,6 @@ def get_parcels_geojson():
                 feature["properties"]["status"] = matched["status"]
                 feature["properties"]["confidence_score"] = matched["confidence_score"]
                 feature["properties"]["conflict_type"] = matched["conflict_type"]
-                # Red for Pending Review, Green for Synchronized
                 feature["properties"]["color"] = "#ef4444" if matched["status"] == "PENDING_REVIEW" else "#22c55e"
 
         return geojson_data
@@ -75,7 +80,6 @@ def get_parcels_geojson():
 
 @app.post("/api/v1/conflicts/resolve")
 def resolve_conflict(req: ConflictResolutionRequest):
-    """Human-in-the-loop endpoint: Official resolves discrepancy and commits audit note."""
     for record in DATA_STORE["records"]:
         if record["parcel_id"] == req.parcel_id:
             record["status"] = "SYNCHRONIZED"
