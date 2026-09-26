@@ -7,7 +7,6 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [baseMapType, setBaseMapType] = useState('satellite');
   
-  // Modal state
   const [selectedParcel, setSelectedParcel] = useState(null);
   const [resolutionAction, setResolutionAction] = useState('TRIM_OVERLAP_BOUNDARY');
   const [auditNotes, setAuditNotes] = useState('Ground survey matched cadastral markers. Boundary overlap clipped.');
@@ -15,25 +14,11 @@ function App() {
   const mapRef = useRef(null);
   const tileLayerRef = useRef(null);
   const cadastralLayerRef = useRef(null);
-  const aiFootprintLayerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const baseMaps = {
     osm: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-  };
-
-  const aiFootprints = {
-    type: "FeatureCollection",
-    features: [
-      {
-        type: "Feature",
-        properties: { name: "AI Extracted Drone Footprint", class: "Built-up" },
-        geometry: {
-          type: "Polygon",
-          coordinates: [[[77.2091, 28.6140], [77.2094, 28.6140], [77.2094, 28.6143], [77.2091, 28.6143], [77.2091, 28.6140]]]
-        }
-      }
-    ]
   };
 
   const fetchParcels = async () => {
@@ -58,12 +43,6 @@ function App() {
             `);
           }
         }).addTo(mapRef.current);
-
-        if (!aiFootprintLayerRef.current) {
-          aiFootprintLayerRef.current = L.geoJSON(aiFootprints, {
-            style: { color: '#06b6d4', weight: 2, dashArray: '5, 5', fillOpacity: 0.2 }
-          }).addTo(mapRef.current);
-        }
 
         mapRef.current.fitBounds(cadastralLayerRef.current.getBounds(), { padding: [60, 60] });
       }
@@ -92,6 +71,26 @@ function App() {
       tileLayerRef.current = L.tileLayer(baseMaps[type], {
         attribution: type === 'satellite' ? 'ESRI World Imagery' : 'OpenStreetMap'
       }).addTo(mapRef.current);
+    }
+  };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setLoading(true);
+      await axios.post('http://localhost:8000/api/v1/ingest/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      alert(`File "${file.name}" ingested and normalized successfully!`);
+      fetchParcels();
+    } catch (err) {
+      alert("Upload failed: " + err.message);
+      setLoading(false);
     }
   };
 
@@ -134,21 +133,30 @@ function App() {
 
   return (
     <div style={{ fontFamily: 'Segoe UI, sans-serif', backgroundColor: '#0f172a', minHeight: '100vh', color: '#f8fafc' }}>
-      {/* Header */}
       <header style={{ background: '#1e293b', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #334155' }}>
         <div>
           <h2 style={{ margin: 0, color: '#38bdf8' }}>BhoomiTrace — Intelligent Land Record Harmonization</h2>
           <small style={{ color: '#94a3b8' }}>SIH Problem Statement: SIH26013 | Urban Land Record Management</small>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            style={{ display: 'none' }}
+            accept=".geojson,.json"
+          />
+          <button onClick={() => fileInputRef.current.click()} style={{ background: '#6366f1', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+            📁 Upload Cadastral File
+          </button>
           <button onClick={() => switchBasemap(baseMapType === 'satellite' ? 'osm' : 'satellite')} style={{ background: '#475569', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer' }}>
-            Mode: {baseMapType === 'satellite' ? '🛰️ Satellite' : '🗺️ Map'}
+            {baseMapType === 'satellite' ? '🛰️ Satellite' : '🗺️ Map'}
           </button>
           <button onClick={handleResetDemo} style={{ background: '#f59e0b', color: '#0f172a', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-            🔄 Reset Demo
+            🔄 Reset
           </button>
           <button onClick={exportGeoJSON} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-            📥 Export GeoJSON
+            📥 Export
           </button>
         </div>
       </header>
@@ -164,30 +172,28 @@ function App() {
           <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#4ade80' }}>{synchronizedCount} / {parcels.length}</div>
         </div>
         <div style={{ background: '#1e293b', padding: '12px 16px', borderRadius: '6px', borderLeft: '4px solid #ef4444' }}>
-          <small style={{ color: '#94a3b8' }}>DISPUTED OVERLAP</small>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#f87171' }}>705.81 m²</div>
+          <small style={{ color: '#94a3b8' }}>PENDING AUDIT</small>
+          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#f87171' }}>{parcels.length - synchronizedCount}</div>
         </div>
         <div style={{ background: '#1e293b', padding: '12px 16px', borderRadius: '6px', borderLeft: '4px solid #a855f7' }}>
-          <small style={{ color: '#94a3b8' }}>GeoAI ENGINE</small>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c084fc' }}>Active (U-Net)</div>
+          <small style={{ color: '#94a3b8' }}>CRS PROJECTION</small>
+          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c084fc' }}>EPSG:3857 (Metric)</div>
         </div>
       </div>
 
       {/* Main Grid */}
       <div style={{ display: 'flex', padding: '0 24px 24px', gap: '20px' }}>
-        {/* Map */}
         <div style={{ flex: 2, background: '#1e293b', borderRadius: '8px', overflow: 'hidden', border: '1px solid #334155' }}>
           <div style={{ padding: '10px 16px', background: '#334155', fontSize: '13px', display: 'flex', justifyContent: 'space-between' }}>
-            <span>🗺️ Spatial Viewer: Cadastral vs. Drone Imagery</span>
-            <span><b style={{ color: '#ef4444' }}>■</b> Conflict | <b style={{ color: '#22c55e' }}>■</b> Synced | <b style={{ color: '#06b6d4' }}>- -</b> GeoAI Footprint</span>
+            <span>🗺️ Spatial Cadastral Overlay</span>
+            <span><b style={{ color: '#ef4444' }}>■</b> Conflict | <b style={{ color: '#22c55e' }}>■</b> Synchronized</span>
           </div>
           <div id="map-container" style={{ height: '520px' }}></div>
         </div>
 
-        {/* Triage Queue */}
-        <div style={{ flex: 1, background: '#1e293b', borderRadius: '8px', border: '1px solid #334155', padding: '16px' }}>
+        <div style={{ flex: 1, background: '#1e293b', borderRadius: '8px', border: '1px solid #334155', padding: '16px', maxHeight: '560px', overflowY: 'auto' }}>
           <h3 style={{ margin: '0 0 12px 0', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>Auditing & Conflict Queue</h3>
-          {loading && <p>Loading data...</p>}
+          {loading && <p>Processing spatial layers...</p>}
           {parcels.map(p => (
             <div key={p.properties.parcel_id} style={{
               border: `1px solid ${p.properties.status === 'SYNCHRONIZED' ? '#166534' : '#991b1b'}`,
@@ -217,13 +223,13 @@ function App() {
         </div>
       </div>
 
-      {/* Official Audit Resolution Modal */}
+      {/* Adjudication Modal */}
       {selectedParcel && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <div style={{ background: '#1e293b', border: '1px solid #475569', borderRadius: '8px', padding: '24px', width: '480px', maxWidth: '90%' }}>
             <h3 style={{ margin: '0 0 16px', color: '#38bdf8' }}>Official Conflict Adjudication Panel</h3>
             <p style={{ fontSize: '13px', color: '#cbd5e1' }}>
-              Resolving parcel <b>{selectedParcel.properties.parcel_id}</b> (Owner: {selectedParcel.properties.owner_name})
+              Resolving parcel <b>{selectedParcel.properties.parcel_id}</b> ({selectedParcel.properties.owner_name})
             </p>
             <div style={{ marginBottom: '14px' }}>
               <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>Adjudication Action</label>

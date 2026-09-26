@@ -1,8 +1,11 @@
-﻿from fastapi import FastAPI, HTTPException
+﻿from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pathlib import Path
 import json
+import geopandas as gpd
+import pandas as pd
+from rapidfuzz import fuzz
 from backend.app.services.harmonization import run_harmonization
 
 app = FastAPI(
@@ -20,7 +23,7 @@ app.add_middleware(
 )
 
 BASE_DIR = Path("C:/Users/NEHAL/BhoomiTrace")
-GEOJSON_PATH = BASE_DIR / "sample_data" / "cadastral_legacy.geojson"
+CURRENT_GEOJSON = None
 
 DATA_STORE = {
     "records": run_harmonization()
@@ -42,28 +45,69 @@ def health():
 
 @app.post("/api/v1/harmonize/reset")
 def reset_demo():
-    """Resets the in-memory data store to initial conflicting test state."""
+    global CURRENT_GEOJSON
+    CURRENT_GEOJSON = None
     DATA_STORE["records"] = run_harmonization()
-    return {
-        "status": "success",
-        "message": "Demo reset to conflict state.",
-        "records": DATA_STORE["records"]
-    }
+    return {"status": "success", "message": "Demo reset to initial test state."}
 
-@app.post("/api/v1/harmonize/run")
-def trigger_harmonization():
-    DATA_STORE["records"] = run_harmonization()
-    return {
-        "status": "success",
-        "parcels_processed": len(DATA_STORE["records"]),
-        "results": DATA_STORE["records"]
-    }
+@app.post("/api/v1/ingest/upload")
+async def upload_cadastral_file(file: UploadFile = File(...)):
+    """Dynamic Ingestion: Uploads external GeoJSON, normalizes CRS, and detects overlaps."""
+    global CURRENT_GEOJSON
+    try:
+        contents = await file.read()
+        raw_geojson = json.loads(contents.decode("utf-8-sig"))
+        gdf = gpd.GeoDataFrame.from_features(raw_geojson["features"])
+        
+        # CRS Normalization to EPSG:3857 for metric spatial calculations
+        if gdf.crs is None or gdf.crs.to_epsg() != 3857:
+            gdf.set_crs(epsg=4326, inplace=True, allow_override=True)
+            gdf = gdf.to_crs(epsg=3857)
+
+        results = []
+        for i, parcel_a in gdf.iterrows():
+            pid = parcel_a.get("parcel_id", f"P-{i+101}")
+            owner = parcel_a.get("owner_name", "Unknown Owner")
+            geom_a = parcel_a["geometry"]
+
+            overlap_detected = False
+            overlap_details = ""
+            for j, parcel_b in gdf.iterrows():
+                if i != j and geom_a.intersects(parcel_b["geometry"]):
+                    area = geom_a.intersection(parcel_b["geometry"]).area
+                    if area > 0.01:
+                        overlap_detected = True
+                        other_pid = parcel_b.get("parcel_id", f"P-{j+101}")
+                        overlap_details = f"Overlaps with {other_pid} by {round(area, 2)} sq.m"
+
+            confidence = 0.62 if overlap_detected else 0.95
+            status = "PENDING_REVIEW" if overlap_detected else "SYNCHRONIZED"
+
+            results.append({
+                "parcel_id": pid,
+                "owner_name": owner,
+                "confidence_score": confidence,
+                "status": status,
+                "conflict_type": "BOUNDARY_OVERLAP" if overlap_detected else "NONE",
+                "details": overlap_details if overlap_detected else "Geometry validated"
+            })
+
+        DATA_STORE["records"] = results
+        CURRENT_GEOJSON = raw_geojson
+        return {"status": "success", "parcels_ingested": len(results), "records": results}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Ingestion failed: {str(e)}")
 
 @app.get("/api/v1/parcels/geojson")
 def get_parcels_geojson():
+    global CURRENT_GEOJSON
     try:
-        with open(GEOJSON_PATH, "r", encoding="utf-8-sig") as f:
-            geojson_data = json.load(f)
+        if CURRENT_GEOJSON:
+            geojson_data = CURRENT_GEOJSON
+        else:
+            with open(BASE_DIR / "sample_data" / "cadastral_legacy.geojson", "r", encoding="utf-8-sig") as f:
+                geojson_data = json.load(f)
 
         for feature in geojson_data["features"]:
             pid = feature["properties"]["parcel_id"]
@@ -71,7 +115,6 @@ def get_parcels_geojson():
             if matched:
                 feature["properties"]["status"] = matched["status"]
                 feature["properties"]["confidence_score"] = matched["confidence_score"]
-                feature["properties"]["conflict_type"] = matched["conflict_type"]
                 feature["properties"]["color"] = "#ef4444" if matched["status"] == "PENDING_REVIEW" else "#22c55e"
 
         return geojson_data
@@ -85,8 +128,6 @@ def resolve_conflict(req: ConflictResolutionRequest):
             record["status"] = "SYNCHRONIZED"
             record["conflict_type"] = "NONE"
             record["confidence_score"] = 1.0
-            record["harmonized_owner"] = req.approved_owner
             record["audit_notes"] = f"Action: {req.resolution_action} | Notes: {req.audit_notes}"
-            return {"status": "success", "message": f"Parcel {req.parcel_id} successfully synchronized.", "updated_record": record}
-
+            return {"status": "success", "message": f"Parcel {req.parcel_id} synchronized."}
     raise HTTPException(status_code=404, detail="Parcel not found")

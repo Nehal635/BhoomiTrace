@@ -1,0 +1,32 @@
+﻿{
+  "type": "FeatureCollection",
+  "name": "ward_12_urban_cadastral",
+  "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "parcel_id": "WARD-101", "owner_name": "Aarav Sharma", "area_sqm": 220.0 },
+      "geometry": { "type": "Polygon", "coordinates": [[[77.2085, 28.6135], [77.2090, 28.6135], [77.2090, 28.6140], [77.2085, 28.6140], [77.2085, 28.6135]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "parcel_id": "WARD-102", "owner_name": "Pooja Hegde", "area_sqm": 250.0 },
+      "geometry": { "type": "Polygon", "coordinates": [[[77.2090, 28.6135], [77.2096, 28.6135], [77.2096, 28.6140], [77.2090, 28.6140], [77.2090, 28.6135]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "parcel_id": "WARD-103", "owner_name": "Vikram Malhotra", "area_sqm": 310.0 },
+      "geometry": { "type": "Polygon", "coordinates": [[[77.2095, 28.6135], [77.2102, 28.6135], [77.2102, 28.6140], [77.2095, 28.6140], [77.2095, 28.6135]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "parcel_id": "WARD-104", "owner_name": "Ananya Roy", "area_sqm": 280.0 },
+      "geometry": { "type": "Polygon", "coordinates": [[[77.2085, 28.6141], [77.2093, 28.6141], [77.2093, 28.6147], [77.2085, 28.6147], [77.2085, 28.6141]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "parcel_id": "WARD-105", "owner_name": "Mohammad Rizwan", "area_sqm": 290.0 },
+      "geometry": { "type": "Polygon", "coordinates": [[[77.2092, 28.6141], [77.2102, 28.6141], [77.2102, 28.6147], [77.2092, 28.6147], [77.2092, 28.6141]]] }
+    }
+  ]
+}
