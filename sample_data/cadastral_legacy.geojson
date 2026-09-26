@@ -1,0 +1,23 @@
+﻿{
+  "type": "FeatureCollection",
+  "name": "legacy_cadastral",
+  "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "parcel_id": "P-101", "owner_name": "Rajesh Kumar", "area_sqm": 250.0 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[77.2090, 28.6139], [77.2095, 28.6139], [77.2095, 28.6144], [77.2090, 28.6144], [77.2090, 28.6139]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "parcel_id": "P-102", "owner_name": "Sunita Verma", "area_sqm": 300.0 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[77.2094, 28.6139], [77.2100, 28.6139], [77.2100, 28.6144], [77.2094, 28.6144], [77.2094, 28.6139]]]
+      }
+    }
+  ]
+}
