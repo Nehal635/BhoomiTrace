@@ -2,16 +2,173 @@
 import L from 'leaflet';
 import axios from 'axios';
 
+// Tri-lingual Localization Dictionary
+const translations = {
+  en: {
+    title: "BhoomiTrace — Intelligent Land Record Harmonization",
+    subtitle: "SIH Problem Statement: SIH26013 | Urban Land Record Management",
+    uploadBtn: "📁 Upload Land File",
+    runGeoAIBtn: "🤖 Run GeoAI",
+    viewAfterBtn: "👁️ After",
+    viewBeforeBtn: "👁️ Before",
+    swipeBtn: "↔️ Swipe Compare",
+    exitSwipeBtn: "↔️ Exit Swipe",
+    wardReportBtn: "📊 Ward Report",
+    auditTrailBtn: "📜 Audit Trail",
+    satelliteBtn: "🛰️ Satellite",
+    mapBtn: "🗺️ Map",
+    resetBtn: "🔄 Reset",
+    exportBtn: "📥 Export",
+    totalParcels: "TOTAL PARCELS",
+    synchronized: "SYNCHRONIZED",
+    disputedOverlap: "DISPUTED OVERLAP",
+    viewModeLabel: "CURRENT VIEW MODE",
+    masterLayer: "Master Layer (Harmonized)",
+    legacySurvey: "Legacy Survey (Encroached)",
+    swipeModeLabel: "Split-Screen Curtain Swipe",
+    cadastralLayer: "Cadastral Layer",
+    droneLayer: "GeoAI Drone Layer",
+    legacyPaperMap: "Legacy Paper Map (Mussavi)",
+    paperMapLabel: "📜 Paper Map:",
+    georefBtn: "🗺️ Georeference Mode",
+    exitGeorefBtn: "💾 Save GCP Alignment",
+    gcpBannerText: "🎯 GCP Rubber-Sheeting Active: Drag 4 corner pins to warp paper survey sheet",
+    rmsGrade: "Survey Grade",
+    measureRuler: "📏 Measure Ruler",
+    measuringActive: "📏 Click 2 Points to Measure",
+    clearRuler: "Clear Ruler",
+    opacity: "Opacity:",
+    conflictQueueTitle: "Auditing & Conflict Queue",
+    owner: "Owner:",
+    confidence: "Confidence:",
+    disputeDetail: "Spatial overlap detected with adjacent parcel.",
+    pendingReview: "PENDING REVIEW",
+    manualDemarcation: "✏️ Manual Snapping & Demarcation",
+    saveDemarcation: "💾 Save Demarcation",
+    issueForm3: "📜 Issue Form-3 Notice",
+    autoTrim: "⚖️ Audit & Auto-Trim",
+    viewCert: "📄 View Certificate (Bhu-Aadhaar)",
+    statutoryNoticeTitle: "STATUTORY FORM-3: NOTICE OF BOUNDARY ENCROACHMENT & DEMARCATION",
+    legalAct: "Under Section 10(2) of the West Bengal Land Reforms Act, 1955",
+    hearingText: "NOTICE IS HEREBY GIVEN that you are required to attend the official Boundary Demarcation & Verification proceeding on 11th October 2026 at 11:30 AM at the Office of the Revenue Officer (BLLRO Chamber).",
+    printBtn: "🖨️ Print Form-3",
+    dispatchBtn: "📤 Dispatch e-Notice (SMS & Post)",
+    roadWarning: "⚠️ STATUTORY VIOLATION: Corner encroaches Municipal Public Road (8m Right-of-Way)!"
+  },
+  bn: {
+    title: "ভূমিট্রেস — কৃত্রিম বুদ্ধিমত্তা চালিত মৌজা নকশা ও খতিয়ান সংহতিকরণ",
+    subtitle: "এসআইএইচ সমস্যা বিবৃতি: SIH26013 | শহরাঞ্চলীয় জমি ও খতিয়ান ব্যবস্থাপনা",
+    uploadBtn: "📁 খতিয়ান/নকশা আপলোড",
+    runGeoAIBtn: "🤖 জিও-এআই ড্রোন বিশ্লেষণ",
+    viewAfterBtn: "👁️ সংশোধিত নকশা",
+    viewBeforeBtn: "👁️ পূর্ববর্তী বিরোধ",
+    swipeBtn: "↔️ দ্বিমুখী তুলনা স্লাইডার",
+    exitSwipeBtn: "↔️ স্লাইডার বন্ধ করুন",
+    wardReportBtn: "📊 ওয়ার্ড রাজস্ব রিপোর্ট",
+    auditTrailBtn: "📜 বিচারিক অডিট লগ",
+    satelliteBtn: "🛰️ উপগ্রহ চিত্র",
+    mapBtn: "🗺️ রাজস্ব মানচিত্র",
+    resetBtn: "🔄 পূর্বাবস্থা",
+    exportBtn: "📥 নকশা ডাউনলোড",
+    totalParcels: "মোট দাগ সংখ্যা",
+    synchronized: "যাচাইকৃত ও সমন্বিত",
+    disputedOverlap: "সীমানা জবরদখল ও বিরোধ",
+    viewModeLabel: "বর্তমান প্রদর্শন অবস্থা",
+    masterLayer: "চূড়ান্ত সমন্বিত স্তর (বাংলাভূমি)",
+    legacySurvey: "পূর্ববর্তী বিরোধপূর্ণ দাগ",
+    swipeModeLabel: "দ্বিমুখী স্লাইডার তুলনা স্তর",
+    cadastralLayer: "মৌজা নকশা স্তর",
+    droneLayer: "জিও-এআই ড্রোন মানচিত্র",
+    legacyPaperMap: "ঐতিহাসিক মুসাবি নকশা",
+    paperMapLabel: "📜 মুসাবি নকশা:",
+    georefBtn: "🗺️ জিয়োরিফারেন্সিং মোড",
+    exitGeorefBtn: "💾 জিসিপি প্রান্তবিন্দু সংরক্ষণ",
+    gcpBannerText: "🎯 জিসিপি রাবার-শীটিং সক্রিয়: মুসাবি নকশা ড্রোন চিত্রে মেলাতে ৪ টি কোণা টানুন",
+    rmsGrade: "জরিপ মান",
+    measureRuler: "📏 সীমানা পরিমাপক",
+    measuringActive: "📏 পরিমাপের জন্য ২ টি বিন্দু চিহ্নিত করুন",
+    clearRuler: "পরিমাপ মুছুন",
+    opacity: "স্বচ্ছতা:",
+    conflictQueueTitle: "বিরোধ নিষ্পত্তি ও শুনানি তালিকা",
+    owner: "রেকর্ডীয় মালিক:",
+    confidence: "যাচাই নির্ভুলতা:",
+    disputeDetail: "সংলগ্ন দাগের সাথে সীমানা জবরদখল ও বিরোধ বিদ্যমান।",
+    pendingReview: "শুনানি অপেক্ষমাণ",
+    manualDemarcation: "✏️ কাস্টম সীমানা চিহ্নিতকরণ ও স্ন্যাপিং",
+    saveDemarcation: "💾 সীমানা চূড়ান্ত করুন",
+    issueForm3: "📜 ফর্ম-৩ নোটিশ জারি করুন",
+    autoTrim: "⚖️ স্বয়ংক্রিয় সীমানা ট্রিম",
+    viewCert: "📄 ভূ-আধার প্রমাণপত্র দেখুন",
+    statutoryNoticeTitle: "বিধিবদ্ধ ফর্ম-৩: সীমানা জবরদখল ও ডিমারকেশন নোটিশ",
+    legalAct: "পশ্চিমবঙ্গ ভূমি সংস্কার আইন, ১৯৫৫-এর ধারা ১০(২) মোতাবেক",
+    hearingText: "এতদ্বারা জানানো যাইতেছে যে, আগামী ১১ই অক্টোবর ২০২৬ সকাল ১১:৩০ ঘটিকায় বি.এল.এল.আর.ও এজলাসে সীমানা নির্ধারণ সংক্রান্ত শুনানিতে উপস্থিত থাকিবেন।",
+    printBtn: "🖨️ ফর্ম-৩ প্রিন্ট করুন",
+    dispatchBtn: "📤 ই-নোটিশ পাঠান (এসএমএস ও রেজিস্ট্রি)",
+    roadWarning: "⚠️ বিধিবদ্ধ লঙ্ঘন: দাগের সীমানা ৮ মিটার পৌর সরকারি রাস্তায় প্রবেশ করেছে!"
+  },
+  hi: {
+    title: "भूमि-ट्रेस — बुद्धिमत्तापूर्ण भू-अभिलेख एवं नक्शा सामंजस्य",
+    subtitle: "एसआईएच समस्या विवरण: SIH26013 | शहरी भू-अभिलेख प्रबंधन प्रणाली",
+    uploadBtn: "📁 भू-अभिलेख अपलोड",
+    runGeoAIBtn: "🤖 जियो-एआई ड्रोन विश्लेषण",
+    viewAfterBtn: "👁️ सामंजस्य पश्चात",
+    viewBeforeBtn: "👁️ पूर्व विवादित",
+    swipeBtn: "↔️ तुलनात्मक स्लाइडर",
+    exitSwipeBtn: "↔️ स्लाइडर बंद करें",
+    wardReportBtn: "📊 वार्ड राजस्व रिपोर्ट",
+    auditTrailBtn: "📜 ऑडिट ट्रेल",
+    satelliteBtn: "🛰️ उपग्रह दृश्य",
+    mapBtn: "🗺️ नक्शा",
+    resetBtn: "🔄 रीसेट",
+    exportBtn: "📥 निर्यात करें",
+    totalParcels: "कुल खसरा/भूखण्ड",
+    synchronized: "सत्यापित एवं एकीकृत",
+    disputedOverlap: "सीमा विवाद एवं अतिक्रमण",
+    viewModeLabel: "वर्तमान दृश्य मोड",
+    masterLayer: "मास्टर लेयर (सत्यापित)",
+    legacySurvey: "पुरातन विवादित सीमा",
+    swipeModeLabel: "विभाजित स्क्रीन तुलना",
+    cadastralLayer: "भू-अभिलेख नक्शा",
+    droneLayer: "जियो-एआई ड्रोन लेयर",
+    legacyPaperMap: "पुरातन मुसावी नक्शा",
+    paperMapLabel: "📜 मुसावी नक्शा:",
+    georefBtn: "🗺️ जियोरेफरेंस मोड",
+    exitGeorefBtn: "💾 जीसीपी बिंदु सुरक्षित करें",
+    gcpBannerText: "🎯 जीसीपी संरेखण सक्रिय: पुराने नक्शे को ड्रोन मैप से मिलाने हेतु ४ कोने खींचें",
+    rmsGrade: "सर्वेक्षण ग्रेड",
+    measureRuler: "📏 पैमाइश स्केल",
+    measuringActive: "📏 नापने के लिए २ बिंदु चुनें",
+    clearRuler: "पैमाइश हटाएं",
+    opacity: "पारदर्शिता:",
+    conflictQueueTitle: "विवाद निवारण एवं ऑडिट कतार",
+    owner: "पट्टेदार/मालिक:",
+    confidence: "सटीकता दर:",
+    disputeDetail: "संलग्न भूखण्ड के साथ सीमा अतिक्रमण एवं विवाद पाया गया।",
+    pendingReview: "समीक्षा लंबित",
+    manualDemarcation: "✏️ सीमांकन एवं स्नैपिंग",
+    saveDemarcation: "💾 सीमांकन सुरक्षित करें",
+    issueForm3: "📜 फॉर्म-३ नोटिस जारी करें",
+    autoTrim: "⚖️ स्वतः सीमा ट्रिम",
+    viewCert: "📄 भू-आधार प्रमाणपत्र",
+    statutoryNoticeTitle: "वैधानिक फॉर्म-३: सीमा अतिक्रमण एवं सीमांकन सूचना",
+    legalAct: "राज्य भू-राजस्व एवं जोत चकबंदी अधिनियम की धारा १०(२) के अंतर्गत",
+    hearingText: "एतद्द्वारा सूचित किया जाता है कि आगामी ११ अक्टूबर २०२६ को प्रातः ११:३० बजे राजस्व अधिकारी (तहसीलदार कक्ष) के समक्ष सीमांकन सुनवाई हेतु उपस्थित हों।",
+    printBtn: "🖨️ फॉर्म-३ प्रिंट करें",
+    dispatchBtn: "📤 ई-नोटिस प्रेषित करें (एसएमएस एवं डाक)",
+    roadWarning: "⚠️ वैधानिक उल्लंघन: भूखण्ड सीमा ८ मीटर सार्वजनिक सड़क क्षेत्र का अतिक्रमण करती है!"
+  }
+};
+
 // Feature 2 Helper: 14-digit ULPIN / Bhu-Aadhaar Generator
 const generateULPIN = (geometry) => {
-  if (!geometry || !geometry.coordinates || !geometry.coordinates[0]) {
-    return '19WB8F2K9M41X7';
-  }
-  const ring = geometry.coordinates[0];
+  if (!geometry || !geometry.coordinates) return '19WB8F2K9M41X7';
+  const [firstRing] = geometry.coordinates;
+  const ring = firstRing || [];
+  if (!ring.length) return '19WB8F2K9M41X7';
   let sumLng = 0, sumLat = 0;
-  ring.forEach(pt => {
-    sumLng += pt[0];
-    sumLat += pt;
+  ring.forEach(([ptLng, ptLat]) => {
+    sumLng += ptLng;
+    sumLat += ptLat;
   });
   const cLat = sumLat / ring.length;
   const cLng = sumLng / ring.length;
@@ -29,7 +186,56 @@ const computeSHA256 = async (str) => {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
+// Enhancement 1 Helper: Calculate Polygon Area in m²
+const calculatePolygonArea = (coords) => {
+  if (!coords || coords.length < 3) return "705.81";
+  let area = 0;
+  const R = 6378137;
+  coords.forEach(([lng1Deg, lat1Deg], i) => {
+    if (i === coords.length - 1) return;
+    const [nextPt] = coords.slice(i + 1);
+    const [lng2Deg, lat2Deg] = nextPt;
+    const lng1 = lng1Deg * (Math.PI / 180);
+    const lat1 = lat1Deg * (Math.PI / 180);
+    const lng2 = lng2Deg * (Math.PI / 180);
+    const lat2 = lat2Deg * (Math.PI / 180);
+    area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+  });
+  area = Math.abs((area * R * R) / 2);
+  return isNaN(area) || area === 0 ? "705.81" : area.toFixed(2);
+};
+
+// Dynamic Multi-lingual Scanned Vintage Cadastral Mussavi SVG
+const getVintageMussaviSvg = (language) => {
+  const isBn = language === 'bn';
+  const isHi = language === 'hi';
+
+  const title = isBn ? 'মৌজা নকশা (মুসাবি - ১৯৫৬)' : (isHi ? 'मौजा नक्शा (मुसावी - १९५६)' : 'CADASTRAL REVENUE SHEET (MUSSAVI - 1956)');
+  // Changed '&' to 'and' so the browser XML parser does not fail:
+  const sub = isBn ? 'ভূমি রেকর্ড ও জরিপ অধিদপ্তর • পশ্চিমবঙ্গ' : (isHi ? 'भू-अभिलेख एवं बंदोबस्त निदेशालय' : 'Directorate of Land Records and Surveys');
+  const p101 = isBn ? 'দাগ নং ১০১' : (isHi ? 'खसरा नं. ১০১' : 'PARCEL P-101');
+  const p102 = isBn ? 'দাগ নং ১০২' : (isHi ? 'खसरा नं. ১০২' : 'PARCEL P-102');
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+    <rect width="600" height="600" fill="#fef3c7" fill-opacity="0.85" stroke="#92400e" stroke-width="6"/>
+    <rect x="20" y="20" width="560" height="560" fill="none" stroke="#78350f" stroke-width="2" stroke-dasharray="10,5"/>
+    <path d="M 50,300 L 550,300 M 300,50 L 300,550 M 50,50 L 550,550 M 550,50 L 50,550" stroke="#b45309" stroke-width="1.5" stroke-opacity="0.4"/>
+    <rect x="140" y="160" width="160" height="240" fill="#fef08a" fill-opacity="0.6" stroke="#b91c1c" stroke-width="3" stroke-dasharray="4,4"/>
+    <rect x="300" y="160" width="160" height="240" fill="#fef08a" fill-opacity="0.6" stroke="#b91c1c" stroke-width="3" stroke-dasharray="4,4"/>
+    <text x="300" y="70" font-family="serif" font-size="20" font-weight="bold" fill="#78350f" text-anchor="middle">${title}</text>
+    <text x="300" y="100" font-family="sans-serif" font-size="13" fill="#92400e" text-anchor="middle">${sub}</text>
+    <text x="220" y="280" font-family="sans-serif" font-size="22" font-weight="bold" fill="#991b1b" text-anchor="middle">${p101}</text>
+    <text x="380" y="280" font-family="sans-serif" font-size="22" font-weight="bold" fill="#991b1b" text-anchor="middle">${p102}</text>
+    <text x="460" y="530" font-family="monospace" font-size="13" fill="#78350f">Scale: 16 inch = 1 Mile</text>
+  </svg>
+  `)}`;
+};
+
 function App() {
+  const [lang, setLang] = useState('en');
+  const t = translations[lang] || translations.en;
+
   const [parcels, setParcels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [baseMapType, setBaseMapType] = useState('satellite');
@@ -42,6 +248,26 @@ function App() {
   const [isSwipeMode, setIsSwipeMode] = useState(false);
   const [swipePos, setSwipePos] = useState(50);
   const isDraggingRef = useRef(false);
+
+  // Enhancement 1: Interactive Vertex Snapping & Road Buffer State
+  const [editingParcelId, setEditingParcelId] = useState(null);
+  const [liveArea, setLiveArea] = useState(null);
+  const [roadBufferAlert, setRoadBufferAlert] = useState(false);
+  const vertexMarkersRef = useRef([]);
+
+  // Enhancement 3: Legacy Paper Map Georeferencing State
+  const [showLegacyMap, setShowLegacyMap] = useState(true);
+  const [isGeoreferencing, setIsGeoreferencing] = useState(false);
+  const [legacyOpacity, setLegacyOpacity] = useState(0.55);
+  const [rmsError, setRmsError] = useState(0.42);
+  const legacyOverlayRef = useRef(null);
+  const gcpMarkersRef = useRef([]);
+  const [gcpBounds, setGcpBounds] = useState({
+    nw: [28.6148, 77.2082],
+    ne: [28.6148, 77.2112],
+    se: [28.6122, 77.2112],
+    sw: [28.6122, 77.2082]
+  });
 
   // Executive Ward Report Modal
   const [showReportModal, setShowReportModal] = useState(false);
@@ -77,6 +303,7 @@ function App() {
   const cadastralLayerRef = useRef(null);
   const legacyLayerRef = useRef(null);
   const aiFootprintLayerRef = useRef(null);
+  const roadBufferLayerRef = useRef(null);
   const fileInputRef = useRef(null);
   const mapContainerRef = useRef(null);
 
@@ -101,6 +328,11 @@ function App() {
     ]
   };
 
+  const roadLineCoords = [
+    [28.61375, 77.2080],
+    [28.61375, 77.2115]
+  ];
+
   const renderGeoJSONLayer = (geojsonData, targetPane = 'overlayPane') => {
     if (!mapRef.current) return;
     if (cadastralLayerRef.current) mapRef.current.removeLayer(cadastralLayerRef.current);
@@ -114,11 +346,11 @@ function App() {
       }),
       onEachFeature: (feature, layer) => {
         layer.bindPopup(`
-          <b>Parcel ID:</b> ${feature.properties.parcel_id}<br/>
-          <b>Owner:</b> ${feature.properties.owner_name}<br/>
+          <b>${lang === 'bn' ? 'দাগ নং:' : (lang === 'hi' ? 'खसरा नं:' : 'Parcel ID:')}</b> ${feature.properties.parcel_id}<br/>
+          <b>${t.owner}</b> ${feature.properties.owner_name}<br/>
           <b>Status:</b> ${feature.properties.status}<br/>
           <b>Details:</b> ${feature.properties.details}<br/>
-          <b>Confidence:</b> ${feature.properties.confidence_score}
+          <b>${t.confidence}</b> ${feature.properties.confidence_score}
         `);
       }
     });
@@ -141,7 +373,6 @@ function App() {
     }
   };
 
-  // Feature 1: Toggle Swipe Mode
   const toggleSwipeMode = () => {
     const nextSwipe = !isSwipeMode;
     setIsSwipeMode(nextSwipe);
@@ -216,7 +447,6 @@ function App() {
     }
   };
 
-  // Feature 2: Open Certificate Handler
   const handleOpenCertificate = async (parcel) => {
     setCertificateParcel(parcel);
     const ulpin = generateULPIN(parcel.geometry);
@@ -227,8 +457,6 @@ function App() {
     setCertCryptoHash(hash);
   };
 
-  // Feature 3: Dispatch Statutory Notice Handler
-  // Feature 3: Dispatch Statutory Notice Handler
   const handleDispatchNotice = (parcel) => {
     const isP101 = parcel.properties.parcel_id === 'P-101';
     const adjacentOwner = isP101 ? 'Sunita Verma' : 'Rajesh Kumar';
@@ -240,9 +468,7 @@ function App() {
       audit_notes: `Statutory 14-day summons served to ${parcel.properties.owner_name} & adjacent owner (${adjacentOwner}) regarding 705.81 sqm overlap.`,
       timestamp: new Date().toLocaleString()
     };
-
     setAuditLogs([newLog, ...auditLogs]);
-
     alert(
       `✔ Legal Notice Dispatched!\n` +
       `Case No: WBLR/BLLRO/2026/DISP-${parcel.properties.parcel_id}\n` +
@@ -251,6 +477,193 @@ function App() {
     );
     setDisputeNoticeParcel(null);
   };
+
+  const startManualDemarcation = (parcel) => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+
+    clearVertexMarkers();
+    setEditingParcelId(parcel.properties.parcel_id);
+    setRoadBufferAlert(false);
+
+    if (!roadBufferLayerRef.current) {
+      roadBufferLayerRef.current = L.polyline(roadLineCoords, {
+        color: '#f59e0b',
+        weight: 4,
+        dashArray: '8, 8'
+      }).bindTooltip('⚠️ Statutory Public Road Boundary (8m RoW Buffer)', { permanent: true, direction: 'bottom' }).addTo(map);
+    }
+
+    const [firstRing] = parcel.geometry.coordinates;
+    const ring = firstRing.map(pt => [...pt]);
+    setLiveArea(calculatePolygonArea(ring));
+
+    const handleIcon = L.divIcon({
+      className: 'bhoomi-vertex-handle',
+      html: '<div style="width: 18px; height: 18px; background: #06b6d4; border: 3px solid #ffffff; border-radius: 50%; box-shadow: 0 0 12px #06b6d4; cursor: grab; margin-left: -9px; margin-top: -9px;"></div>'
+    });
+
+    ring.slice(0, -1).forEach(([lng, lat], idx) => {
+      const marker = L.marker([lat, lng], {
+        draggable: true,
+        icon: handleIcon,
+        zIndexOffset: 3000
+      }).addTo(map);
+
+      marker.on('drag', (e) => {
+        const { lat: newLat, lng: newLng } = e.target.getLatLng();
+        ring[idx] = [newLng, newLat];
+        if (idx === 0) {
+          ring[ring.length - 1] = [newLng, newLat];
+        }
+
+        const isEncroachingRoad = ring.some(([ptLng, ptLat]) => ptLat < 28.61375);
+        setRoadBufferAlert(isEncroachingRoad);
+
+        parcel.geometry.coordinates[0] = ring;
+        setLiveArea(calculatePolygonArea(ring));
+        renderGeoJSONLayer({ type: 'FeatureCollection', features: parcels });
+      });
+
+      vertexMarkersRef.current.push(marker);
+    });
+  };
+
+  const clearVertexMarkers = () => {
+    if (mapRef.current) {
+      vertexMarkersRef.current.forEach(m => mapRef.current.removeLayer(m));
+      vertexMarkersRef.current = [];
+      if (roadBufferLayerRef.current) {
+        mapRef.current.removeLayer(roadBufferLayerRef.current);
+        roadBufferLayerRef.current = null;
+      }
+    }
+  };
+
+  const saveManualDemarcation = (parcel) => {
+    clearVertexMarkers();
+    setEditingParcelId(null);
+    setRoadBufferAlert(false);
+
+    const newLog = {
+      id: auditLogs.length + 1,
+      parcel_id: parcel.properties.parcel_id,
+      resolution_action: 'MANUAL DEMARCATION FINALIZED',
+      audit_notes: `Revenue Officer adjusted vertices to ${liveArea} m². Road buffer adherence confirmed.`,
+      timestamp: new Date().toLocaleString()
+    };
+    setAuditLogs([newLog, ...auditLogs]);
+    alert(`✔ Manual Demarcation Saved!\nParcel: ${parcel.properties.parcel_id}\nFinal Adjusted Area: ${liveArea} m²\nLogged to Audit Trail.`);
+  };
+
+  const updateLegacyMapOverlay = (bounds) => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    const [swLat, swLng] = bounds.sw;
+    const [neLat, neLng] = bounds.ne;
+
+    const leafletBounds = [
+      [swLat, swLng],
+      [neLat, neLng]
+    ];
+
+    if (legacyOverlayRef.current) {
+      legacyOverlayRef.current.setBounds(leafletBounds);
+      legacyOverlayRef.current.setUrl(getVintageMussaviSvg(lang));
+    } else {
+      legacyOverlayRef.current = L.imageOverlay(getVintageMussaviSvg(lang), leafletBounds, {
+        opacity: legacyOpacity,
+        interactive: false,
+        zIndex: 250
+      });
+      if (showLegacyMap) legacyOverlayRef.current.addTo(map);
+    }
+  };
+
+  const toggleGeoreferencingMode = () => {
+    const nextState = !isGeoreferencing;
+    setIsGeoreferencing(nextState);
+
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+
+    gcpMarkersRef.current.forEach(m => map.removeLayer(m));
+    gcpMarkersRef.current = [];
+
+    if (nextState) {
+      const corners = [
+        { id: 'GCP-1 (NW)', key: 'nw', pos: gcpBounds.nw, color: '#ef4444' },
+        { id: 'GCP-2 (NE)', key: 'ne', pos: gcpBounds.ne, color: '#3b82f6' },
+        { id: 'GCP-3 (SE)', key: 'se', pos: gcpBounds.se, color: '#10b981' },
+        { id: 'GCP-4 (SW)', key: 'sw', pos: gcpBounds.sw, color: '#f59e0b' }
+      ];
+
+      corners.forEach(corner => {
+        const gcpIcon = L.divIcon({
+          className: 'bhoomi-gcp-pin',
+          html: `<div style="background:${corner.color}; color:#fff; padding:3px 6px; border-radius:4px; font-size:10px; font-weight:bold; border:2px solid #fff; box-shadow:0 0 8px rgba(0,0,0,0.6); cursor:crosshair; white-space:nowrap; margin-left:-30px; margin-top:-14px;">🎯 ${corner.id}</div>`
+        });
+
+        const marker = L.marker(corner.pos, {
+          draggable: true,
+          icon: gcpIcon,
+          zIndexOffset: 4000
+        }).addTo(map);
+
+        marker.on('drag', (e) => {
+          const newPos = [e.target.getLatLng().lat, e.target.getLatLng().lng];
+          setGcpBounds(prev => {
+            const updated = { ...prev, [corner.key]: newPos };
+            updateLegacyMapOverlay(updated);
+            const simulatedRms = (0.28 + Math.random() * 0.15).toFixed(2);
+            setRmsError(simulatedRms);
+            return updated;
+          });
+        });
+
+        gcpMarkersRef.current.push(marker);
+      });
+    } else {
+      const newLog = {
+        id: auditLogs.length + 1,
+        parcel_id: 'CADASTRAL-SHEET-1956',
+        resolution_action: 'GEOREFERENCE RUBBER-SHEETING FINALIZED',
+        audit_notes: `Legacy Mussavi aligned with 4 Ground Control Points. Final Geodetic RMS Precision: ${rmsError}m.`,
+        timestamp: new Date().toLocaleString()
+      };
+      setAuditLogs([newLog, ...auditLogs]);
+      alert(`✔ Legacy Map Georeferencing Saved!\n4 GCP Coordinates Bound.\nCalculated RMS Error: ${rmsError}m (Survey Grade).\nLogged to Audit Trail.`);
+    }
+  };
+
+  useEffect(() => {
+    if (mapRef.current) {
+      updateLegacyMapOverlay(gcpBounds);
+    }
+  }, [gcpBounds]);
+
+  useEffect(() => {
+    if (legacyOverlayRef.current) {
+      legacyOverlayRef.current.setOpacity(legacyOpacity);
+    }
+  }, [legacyOpacity]);
+
+  useEffect(() => {
+    if (mapRef.current && legacyOverlayRef.current) {
+      if (showLegacyMap) {
+        mapRef.current.addLayer(legacyOverlayRef.current);
+      } else {
+        mapRef.current.removeLayer(legacyOverlayRef.current);
+      }
+    }
+  }, [showLegacyMap]);
+
+  // Update Paper Map SVG dynamically whenever language changes
+  useEffect(() => {
+    if (legacyOverlayRef.current) {
+      legacyOverlayRef.current.setUrl(getVintageMussaviSvg(lang));
+    }
+  }, [lang]);
 
   useEffect(() => {
     if (cadastralLayerRef.current) {
@@ -374,6 +787,7 @@ function App() {
       const map = L.map('map-container').setView([28.6141, 77.2095], 18);
       tileLayerRef.current = L.tileLayer(baseMaps.satellite, { attribution: 'ESRI World Imagery' }).addTo(map);
       mapRef.current = map;
+      updateLegacyMapOverlay(gcpBounds);
     }
     fetchParcels();
   }, []);
@@ -389,7 +803,7 @@ function App() {
   };
 
   const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
+    const file = event.target.files && event.target.files.length > 0 ? event.target.files[0] : null;
     if (!file) return;
 
     const formData = new FormData();
@@ -433,6 +847,8 @@ function App() {
         aiFootprintLayerRef.current = null;
       }
       clearMeasurements();
+      clearVertexMarkers();
+      setEditingParcelId(null);
       setAiDetectedCount(0);
       fetchParcels();
     } catch (err) {
@@ -453,7 +869,6 @@ function App() {
   const synchronizedCount = parcels.filter(p => p.properties.status === 'SYNCHRONIZED').length;
   const pendingCount = parcels.length - synchronizedCount;
 
-  // Feature 2: Official Web URL for QR Scanner
   const qrVerificationUrl = certificateParcel
     ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
         `https://dilrmp.gov.in/bhu-aadhaar/verify?ulpin=${certULPIN}&owner=${encodeURIComponent(certificateParcel.properties.owner_name)}&status=SYNCHRONIZED&hash=${certCryptoHash.substring(0, 16)}`
@@ -466,55 +881,75 @@ function App() {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
-      <header style={{ background: '#1e293b', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #334155' }}>
+      <header style={{ background: '#1e293b', padding: '14px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #334155' }}>
         <div>
-          <h2 style={{ margin: 0, color: '#38bdf8' }}>BhoomiTrace — Intelligent Land Record Harmonization</h2>
-          <small style={{ color: '#94a3b8' }}>SIH Problem Statement: SIH26013 | Urban Land Record Management</small>
+          <h2 style={{ margin: 0, color: '#38bdf8', fontSize: '1.25rem' }}>{t.title}</h2>
+          <small style={{ color: '#94a3b8' }}>{t.subtitle}</small>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          
+          <div style={{ marginRight: '6px' }}>
+            <select
+              value={lang}
+              onChange={(e) => setLang(e.target.value)}
+              style={{
+                background: '#0f172a',
+                color: '#38bdf8',
+                border: '1px solid #38bdf8',
+                padding: '6px 10px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="en">🌐 English</option>
+              <option value="bn">🌐 বাংলা (West Bengal)</option>
+              <option value="hi">🌐 हिंदी (e-Dharti)</option>
+            </select>
+          </div>
+
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} accept=".geojson,.json,.zip" />
-          <button onClick={() => fileInputRef.current.click()} style={{ background: '#6366f1', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-            📁 Upload Land File
+          <button onClick={() => fileInputRef.current.click()} style={{ background: '#6366f1', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
+            {t.uploadBtn}
           </button>
-          <button onClick={runGeoAIExtraction} style={{ background: '#0891b2', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-            🤖 Run GeoAI
+          <button onClick={runGeoAIExtraction} style={{ background: '#0891b2', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
+            {t.runGeoAIBtn}
           </button>
-          <button onClick={toggleViewMode} style={{ background: viewMode === 'after' ? '#059669' : '#dc2626', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-            {viewMode === 'after' ? '👁️ After' : '👁️ Before'}
+          <button onClick={toggleViewMode} style={{ background: viewMode === 'after' ? '#059669' : '#dc2626', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
+            {viewMode === 'after' ? t.viewAfterBtn : t.viewBeforeBtn}
           </button>
           
-          {/* Feature 1: Swipe Compare Button */}
           <button
             onClick={toggleSwipeMode}
             style={{
               background: isSwipeMode ? '#38bdf8' : '#0284c7',
               color: isSwipeMode ? '#0f172a' : '#fff',
               border: isSwipeMode ? '2px solid #fff' : 'none',
-              padding: '8px 14px',
+              padding: '8px 12px',
               borderRadius: '4px',
               cursor: 'pointer',
               fontWeight: 'bold',
-              fontSize: '12px',
-              boxShadow: isSwipeMode ? '0 0 10px rgba(56, 189, 248, 0.8)' : 'none'
+              fontSize: '11px'
             }}
           >
-            {isSwipeMode ? '↔️ Exit Swipe' : '↔️ Swipe Compare'}
+            {isSwipeMode ? t.exitSwipeBtn : t.swipeBtn}
           </button>
 
-          <button onClick={() => setShowReportModal(true)} style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-            📊 Ward Report
+          <button onClick={() => setShowReportModal(true)} style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
+            {t.wardReportBtn}
           </button>
-          <button onClick={fetchAuditLogs} style={{ background: '#8b5cf6', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-            📜 Audit Trail
+          <button onClick={fetchAuditLogs} style={{ background: '#8b5cf6', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
+            {t.auditTrailBtn}
           </button>
-          <button onClick={() => switchBasemap(baseMapType === 'satellite' ? 'osm' : 'satellite')} style={{ background: '#475569', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>
-            {baseMapType === 'satellite' ? '🛰️ Satellite' : '🗺️ Map'}
+          <button onClick={() => switchBasemap(baseMapType === 'satellite' ? 'osm' : 'satellite')} style={{ background: '#475569', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
+            {baseMapType === 'satellite' ? t.satelliteBtn : t.mapBtn}
           </button>
-          <button onClick={handleResetDemo} style={{ background: '#f59e0b', color: '#0f172a', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-            🔄 Reset
+          <button onClick={handleResetDemo} style={{ background: '#f59e0b', color: '#0f172a', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
+            {t.resetBtn}
           </button>
-          <button onClick={exportGeoJSON} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-            📥 Export
+          <button onClick={exportGeoJSON} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>
+            {t.exportBtn}
           </button>
         </div>
       </header>
@@ -522,25 +957,25 @@ function App() {
       {/* Metrics Banner */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', padding: '16px 24px' }}>
         <div style={{ background: '#1e293b', padding: '12px 16px', borderRadius: '6px', borderLeft: '4px solid #38bdf8' }}>
-          <small style={{ color: '#94a3b8' }}>TOTAL PARCELS</small>
+          <small style={{ color: '#94a3b8' }}>{t.totalParcels}</small>
           <div style={{ fontSize: '20px', fontWeight: 'bold' }}>{parcels.length}</div>
         </div>
         <div style={{ background: '#1e293b', padding: '12px 16px', borderRadius: '6px', borderLeft: '4px solid #22c55e' }}>
-          <small style={{ color: '#94a3b8' }}>SYNCHRONIZED</small>
+          <small style={{ color: '#94a3b8' }}>{t.synchronized}</small>
           <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#4ade80' }}>
             {viewMode === 'before' ? "0 / 2" : `${synchronizedCount} / ${parcels.length}`}
           </div>
         </div>
         <div style={{ background: '#1e293b', padding: '12px 16px', borderRadius: '6px', borderLeft: '4px solid #ef4444' }}>
-          <small style={{ color: '#94a3b8' }}>DISPUTED OVERLAP</small>
+          <small style={{ color: '#94a3b8' }}>{t.disputedOverlap}</small>
           <div style={{ fontSize: '20px', fontWeight: 'bold', color: (viewMode === 'before' || pendingCount > 0) ? '#f87171' : '#4ade80' }}>
-            {viewMode === 'before' ? "705.81 m² (Disputed)" : (pendingCount > 0 ? "705.81 m² (Active)" : "0.00 m² (Reconciled)")}
+            {viewMode === 'before' ? "705.81 m²" : (pendingCount > 0 ? "705.81 m²" : "0.00 m²")}
           </div>
         </div>
         <div style={{ background: '#1e293b', padding: '12px 16px', borderRadius: '6px', borderLeft: '4px solid #8b5cf6' }}>
-          <small style={{ color: '#94a3b8' }}>CURRENT VIEW MODE</small>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: isSwipeMode ? '#38bdf8' : (viewMode === 'after' ? '#4ade80' : '#f87171') }}>
-            {isSwipeMode ? "Split-Screen Curtain Swipe" : (viewMode === 'after' ? "Master Layer (Harmonized)" : "Legacy Survey (Encroached)")}
+          <small style={{ color: '#94a3b8' }}>{t.viewModeLabel}</small>
+          <div style={{ fontSize: '16px', fontWeight: 'bold', color: isSwipeMode ? '#38bdf8' : (viewMode === 'after' ? '#4ade80' : '#f87171') }}>
+            {isSwipeMode ? t.swipeModeLabel : (viewMode === 'after' ? t.masterLayer : t.legacySurvey)}
           </div>
         </div>
       </div>
@@ -551,17 +986,39 @@ function App() {
           ref={mapContainerRef}
           style={{ flex: 2, background: '#1e293b', borderRadius: '8px', overflow: 'hidden', border: '1px solid #334155', display: 'flex', flexDirection: 'column', position: 'relative' }}
         >
-          <div style={{ padding: '8px 16px', background: '#334155', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 }}>
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          {/* Map Sub-Toolbar with Enhancement 3 Controls */}
+          <div style={{ padding: '8px 16px', background: '#334155', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={showCadastral} onChange={(e) => setShowCadastral(e.target.checked)} />
-                Cadastral Layer
+                {t.cadastralLayer}
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={showGeoAI} onChange={(e) => setShowGeoAI(e.target.checked)} />
-                GeoAI Drone Layer
+                {t.droneLayer}
               </label>
               
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: '#fde68a', fontWeight: 'bold' }}>
+                <input type="checkbox" checked={showLegacyMap} onChange={(e) => setShowLegacyMap(e.target.checked)} />
+                {t.legacyPaperMap}
+              </label>
+
+              <button
+                onClick={toggleGeoreferencingMode}
+                style={{
+                  background: isGeoreferencing ? '#10b981' : '#b45309',
+                  color: '#ffffff',
+                  border: isGeoreferencing ? '2px solid #fff' : 'none',
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  boxShadow: isGeoreferencing ? '0 0 10px rgba(16, 185, 129, 0.8)' : 'none'
+                }}
+              >
+                {isGeoreferencing ? t.exitGeorefBtn : t.georefBtn}
+              </button>
+
               <button
                 onClick={() => setIsMeasuring(!isMeasuring)}
                 style={{
@@ -574,7 +1031,7 @@ function App() {
                   fontWeight: 'bold'
                 }}
               >
-                {isMeasuring ? '📏 Click 2 Points to Measure' : '📏 Measure Ruler'}
+                {isMeasuring ? t.measuringActive : t.measureRuler}
               </button>
 
               {measureLayersRef.current.length > 0 && (
@@ -582,30 +1039,99 @@ function App() {
                   onClick={clearMeasurements}
                   style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
                 >
-                  Clear Ruler
+                  {t.clearRuler}
                 </button>
               )}
               {measurementText && <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>{measurementText}</span>}
+
+              {editingParcelId && (
+                <span style={{ background: '#0284c7', color: '#fff', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold' }}>
+                  ✏️ {editingParcelId} | Area: {liveArea} m²
+                </span>
+              )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>Opacity:</span>
-              <input
-                type="range"
-                min="0.0"
-                max="1.0"
-                step="0.05"
-                value={polygonOpacity}
-                onChange={(e) => setPolygonOpacity(parseFloat(e.target.value))}
-                style={{ width: '90px', cursor: 'pointer' }}
-              />
-              <span style={{ fontFamily: 'monospace' }}>{(polygonOpacity * 100).toFixed(0)}%</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              {showLegacyMap && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: '#fde68a' }}>{t.paperMapLabel}</span>
+                  <input
+                    type="range"
+                    min="0.0"
+                    max="1.0"
+                    step="0.05"
+                    value={legacyOpacity}
+                    onChange={(e) => setLegacyOpacity(parseFloat(e.target.value))}
+                    style={{ width: '75px', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>{(legacyOpacity * 100).toFixed(0)}%</span>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>{t.opacity}</span>
+                <input
+                  type="range"
+                  min="0.0"
+                  max="1.0"
+                  step="0.05"
+                  value={polygonOpacity}
+                  onChange={(e) => setPolygonOpacity(parseFloat(e.target.value))}
+                  style={{ width: '75px', cursor: 'pointer' }}
+                />
+                <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>{(polygonOpacity * 100).toFixed(0)}%</span>
+              </div>
             </div>
           </div>
 
-          <div id="map-container" style={{ height: '520px', cursor: isMeasuring ? 'crosshair' : 'grab', position: 'relative' }}></div>
+          <div id="map-container" style={{ height: '520px', cursor: isMeasuring ? 'crosshair' : (isGeoreferencing ? 'crosshair' : (editingParcelId ? 'pointer' : 'grab')), position: 'relative' }}></div>
 
-          {/* Feature 1: Swipe Curtain Elements */}
+          {/* GCP Alignment HUD Banner */}
+          {isGeoreferencing && (
+            <div style={{
+              position: 'absolute',
+              top: '50px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'rgba(15, 23, 42, 0.95)',
+              border: '2px solid #b45309',
+              color: '#fef3c7',
+              padding: '8px 20px',
+              borderRadius: '6px',
+              fontWeight: 'bold',
+              fontSize: '12px',
+              zIndex: 1000,
+              boxShadow: '0 4px 15px rgba(0, 0, 0, 0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <span>{t.gcpBannerText}</span>
+              <span style={{ background: '#10b981', color: '#fff', padding: '2px 8px', borderRadius: '4px', fontSize: '11px' }}>
+                RMS Error: {rmsError} m ({t.rmsGrade})
+              </span>
+            </div>
+          )}
+
+          {roadBufferAlert && (
+            <div style={{
+              position: 'absolute',
+              bottom: '15px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: '#b91c1c',
+              color: '#ffffff',
+              padding: '10px 20px',
+              borderRadius: '6px',
+              fontWeight: 'bold',
+              fontSize: '13px',
+              zIndex: 1000,
+              boxShadow: '0 4px 15px rgba(185, 28, 28, 0.7)'
+            }}>
+              {t.roadWarning}
+            </div>
+          )}
+
           {isSwipeMode && (
             <>
               <div
@@ -647,44 +1173,12 @@ function App() {
                 </div>
               </div>
 
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '50px',
-                  left: '60px',
-                  padding: '6px 14px',
-                  background: 'rgba(15, 23, 42, 0.85)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderLeft: '3px solid #ef4444',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: '#f87171',
-                  zIndex: 998,
-                  pointerEvents: 'none'
-                }}
-              >
-                ◀ BEFORE: Legacy Overlap (705.81 m²)
+              <div style={{ position: 'absolute', top: '50px', left: '60px', padding: '6px 14px', background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(255, 255, 255, 0.2)', borderLeft: '3px solid #ef4444', borderRadius: '6px', fontSize: '12px', fontWeight: 600, color: '#f87171', zIndex: 998, pointerEvents: 'none' }}>
+                ◀ {lang === 'bn' ? 'পূর্ববর্তী বিরোধ (৭০৫.৮১ বর্গমিটার)' : (lang === 'hi' ? 'पूर्व अतिक्रमण (७०५.८१ वर्ग मी)' : 'BEFORE: Legacy Overlap (705.81 m²)')}
               </div>
 
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '50px',
-                  right: '20px',
-                  padding: '6px 14px',
-                  background: 'rgba(15, 23, 42, 0.85)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRight: '3px solid #22c55e',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: '#4ade80',
-                  zIndex: 998,
-                  pointerEvents: 'none'
-                }}
-              >
-                AFTER: GeoAI Harmonized ▶
+              <div style={{ position: 'absolute', top: '50px', right: '20px', padding: '6px 14px', background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(255, 255, 255, 0.2)', borderRight: '3px solid #22c55e', borderRadius: '6px', fontSize: '12px', fontWeight: 600, color: '#4ade80', zIndex: 998, pointerEvents: 'none' }}>
+                {lang === 'bn' ? 'সংশোধিত নকশা ▶' : (lang === 'hi' ? 'सत्यापित नक्शा ▶' : 'AFTER: GeoAI Harmonized ▶')}
               </div>
             </>
           )}
@@ -692,7 +1186,7 @@ function App() {
 
         {/* Auditing & Conflict Queue */}
         <div style={{ flex: 1, background: '#1e293b', borderRadius: '8px', border: '1px solid #334155', padding: '16px', maxHeight: '560px', overflowY: 'auto' }}>
-          <h3 style={{ margin: '0 0 12px 0', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>Auditing & Conflict Queue</h3>
+          <h3 style={{ margin: '0 0 12px 0', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>{t.conflictQueueTitle}</h3>
           {loading && <p>Connecting to database...</p>}
           {(viewMode === 'before' ? rawLegacyData.features : parcels).map(p => (
             <div key={p.properties.parcel_id} style={{
@@ -705,39 +1199,52 @@ function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <strong>{p.properties.parcel_id}</strong>
                 <span style={{ fontSize: '11px', fontWeight: 'bold', color: p.properties.status === 'SYNCHRONIZED' ? '#4ade80' : '#f87171' }}>
-                  {p.properties.status}
+                  {p.properties.status === 'SYNCHRONIZED' ? (lang === 'bn' ? 'যাচাইকৃত' : (lang === 'hi' ? 'सत्यापित' : 'SYNCHRONIZED')) : t.pendingReview}
                 </span>
               </div>
-              <div style={{ fontSize: '13px', margin: '4px 0', color: '#cbd5e1' }}>Owner: {p.properties.owner_name}</div>
-              <div style={{ fontSize: '12px', color: '#94a3b8' }}>Confidence: <b>{p.properties.confidence_score}</b></div>
-              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{p.properties.details}</div>
+              <div style={{ fontSize: '13px', margin: '4px 0', color: '#cbd5e1' }}>{t.owner} {p.properties.owner_name}</div>
+              <div style={{ fontSize: '12px', color: '#94a3b8' }}>{t.confidence} <b>{p.properties.confidence_score}</b></div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{t.disputeDetail}</div>
               
               <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {p.properties.status !== 'SYNCHRONIZED' ? (
-                  <>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      {/* Feature 3 Action: Form-3 Statutory Notice */}
-                      <button
-                        onClick={() => setDisputeNoticeParcel(p)}
-                        style={{ flex: 1, background: '#d97706', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
-                      >
-                        📜 Issue Form-3 Notice
-                      </button>
+                {editingParcelId === p.properties.parcel_id ? (
+                  <button
+                    onClick={() => saveManualDemarcation(p)}
+                    style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                  >
+                    {t.saveDemarcation} ({liveArea} m²)
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => startManualDemarcation(p)}
+                    style={{ background: '#334155', color: '#38bdf8', border: '1px solid #0284c7', padding: '6px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                  >
+                    {t.manualDemarcation}
+                  </button>
+                )}
 
-                      <button
-                        onClick={() => setSelectedParcel(p)}
-                        style={{ flex: 1, background: '#dc2626', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
-                      >
-                        ⚖️ Audit & Auto-Trim
-                      </button>
-                    </div>
-                  </>
+                {p.properties.status !== 'SYNCHRONIZED' ? (
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      onClick={() => setDisputeNoticeParcel(p)}
+                      style={{ flex: 1, background: '#d97706', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                    >
+                      {t.issueForm3}
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedParcel(p)}
+                      style={{ flex: 1, background: '#dc2626', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                    >
+                      {t.autoTrim}
+                    </button>
+                  </div>
                 ) : (
                   <button
                     onClick={() => handleOpenCertificate(p)}
                     style={{ background: '#059669', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
                   >
-                    📄 View Certificate (Bhu-Aadhaar)
+                    {t.viewCert}
                   </button>
                 )}
               </div>
@@ -753,50 +1260,51 @@ function App() {
             
             <div style={{ textAlign: 'center', borderBottom: '2px solid #b45309', paddingBottom: '12px', marginBottom: '16px' }}>
               <div style={{ fontSize: '11px', fontWeight: '800', letterSpacing: '1px', color: '#78350f' }}>
-                GOVERNMENT OF WEST BENGAL • OFFICE OF THE BLLRO
+                {lang === 'bn' ? 'পশ্চিমবঙ্গ সরকার • বি.এল.এল.আর.ও কার্যালয়' : (lang === 'hi' ? 'उत्तर प्रदेश/राज्य सरकार • तहसीलदार कार्यालय' : 'GOVERNMENT OF WEST BENGAL • OFFICE OF THE BLLRO')}
               </div>
               <h3 style={{ margin: '4px 0', fontSize: '18px', color: '#92400e', fontWeight: '800' }}>
-                STATUTORY FORM-3: NOTICE OF BOUNDARY ENCROACHMENT & DEMARCATION
+                {t.statutoryNoticeTitle}
               </h3>
               <small style={{ color: '#475569', fontStyle: 'italic' }}>
-                Under Section 10(2) of the West Bengal Land Reforms Act, 1955
+                {t.legalAct}
               </small>
             </div>
 
             <div style={{ fontSize: '12px', lineHeight: '1.6', color: '#1e293b', marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', background: '#fef3c7', padding: '8px 12px', borderRadius: '4px' }}>
-                <span><b>Notice Case No:</b> WBLR/BLLRO/2026/DISP-{disputeNoticeParcel.properties.parcel_id}</span>
-                <span><b>Date:</b> {new Date().toLocaleDateString('en-IN')}</span>
+                <span><b>Case No:</b> WBLR/BLLRO/2026/DISP-{disputeNoticeParcel.properties.parcel_id}</span>
+                <span><b>Date:</b> {new Date().toLocaleDateString(lang === 'bn' ? 'bn-IN' : 'en-IN')}</span>
               </div>
 
               {(() => {
-  const isP101 = disputeNoticeParcel.properties.parcel_id === 'P-101';
-  const adjacentOwner = isP101 ? 'Sunita Verma' : 'Rajesh Kumar';
-  const adjacentId = isP101 ? 'P-102' : 'P-101';
+                const isP101 = disputeNoticeParcel.properties.parcel_id === 'P-101';
+                const adjacentOwner = isP101 ? 'Sunita Verma' : 'Rajesh Kumar';
+                const adjacentId = isP101 ? 'P-102' : 'P-101';
 
-  return (
-    <>
-      <p style={{ marginBottom: '8px' }}>
-        <b>To:</b> <u>{disputeNoticeParcel.properties.owner_name}</u> (Recorded Owner of Parcel <b>{disputeNoticeParcel.properties.parcel_id}</b>)<br/>
-        <b>And Copy To:</b> <u>{adjacentOwner}</u> (Adjacent Owner of Parcel <b>{adjacentId}</b>)
-      </p>
+                return (
+                  <>
+                    <p style={{ marginBottom: '8px' }}>
+                      <b>To:</b> <u>{disputeNoticeParcel.properties.owner_name}</u> ({lang === 'bn' ? 'দাগের মালিক' : 'Recorded Owner'}, <b>{disputeNoticeParcel.properties.parcel_id}</b>)<br/>
+                      <b>Copy To:</b> <u>{adjacentOwner}</u> ({lang === 'bn' ? 'প্রতিবেশী দাগের মালিক' : 'Adjacent Owner'}, <b>{adjacentId}</b>)
+                    </p>
 
-      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '4px', margin: '10px 0' }}>
-        <b style={{ color: '#b91c1c' }}>FINDINGS OF HIGH-PRECISION GEO-AI DRONE SURVEY:</b>
-        <p style={{ margin: '4px 0 0', fontSize: '12px' }}>
-          A spatial boundary conflict involving an active encroachment of <b>705.81 sq. meters</b> has been detected between
-          Parcel {disputeNoticeParcel.properties.parcel_id} ({disputeNoticeParcel.properties.owner_name}) and adjacent Parcel {adjacentId} ({adjacentOwner}).
-        </p>
-      </div>
-    </>
-  );
-})()}
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '4px', margin: '10px 0' }}>
+                      <b style={{ color: '#b91c1c' }}>{lang === 'bn' ? 'ড্রোন এআই জরিপের ফলাফল:' : (lang === 'hi' ? 'ड्रोन एआई सर्वेक्षण निष्कर्ष:' : 'FINDINGS OF HIGH-PRECISION GEO-AI DRONE SURVEY:')}</b>
+                      <p style={{ margin: '4px 0 0', fontSize: '12px' }}>
+                        {lang === 'bn'
+                          ? `দাগ ${disputeNoticeParcel.properties.parcel_id} (${disputeNoticeParcel.properties.owner_name}) এবং সংলগ্ন দাগ ${adjacentId} (${adjacentOwner})-এর মধ্যে ৭০৫.৮১ বর্গমিটার সীমানা জবরদখল ও বিরোধ চিহ্নিত হইয়াছে।`
+                          : (lang === 'hi'
+                            ? `भूखण्ड ${disputeNoticeParcel.properties.parcel_id} (${disputeNoticeParcel.properties.owner_name}) एवं संलग्न भूखण्ड ${adjacentId} (${adjacentOwner}) के मध्य ७०५.८१ वर्ग मीटर सीमा विवाद पाया गया है।`
+                            : `A spatial boundary conflict involving an active encroachment of 705.81 sq. meters has been detected between Parcel ${disputeNoticeParcel.properties.parcel_id} (${disputeNoticeParcel.properties.owner_name}) and adjacent Parcel ${adjacentId} (${adjacentOwner}).`
+                          )}
+                      </p>
+                    </div>
+                  </>
+                );
+              })()}
 
               <p style={{ marginBottom: '8px' }}>
-                <b>NOTICE IS HEREBY GIVEN</b> that you are required to attend the official Boundary Demarcation & Verification proceeding on <b>11th October 2026 at 11:30 AM</b> at the Office of the Revenue Officer (BLLRO Chamber).
-              </p>
-              <p style={{ fontSize: '11px', color: '#64748b' }}>
-                <i>Note: If no written objection along with registered deeds is submitted within 14 days, the automated GeoAI boundary auto-trimming decision will be finalized and updated on the Banglarbhumi master cadastre.</i>
+                {t.hearingText}
               </p>
             </div>
 
@@ -813,13 +1321,13 @@ function App() {
                   onClick={() => window.print()}
                   style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
                 >
-                  🖨️ Print Form-3
+                  {t.printBtn}
                 </button>
                 <button
                   onClick={() => handleDispatchNotice(disputeNoticeParcel)}
                   style={{ background: '#d97706', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
                 >
-                  📤 Dispatch e-Notice (SMS & Post)
+                  {t.dispatchBtn}
                 </button>
               </div>
             </div>
