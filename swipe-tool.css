@@ -1,0 +1,50 @@
+/* BhoomiTrace Swipe Tool Styles */
+.bhoomi-swipe-container {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 4px;
+  height: 100%;
+  background: #38bdf8;
+  z-index: 1000;
+  cursor: ew-resize;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+  pointer-events: auto;
+}
+
+.bhoomi-swipe-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 36px;
+  height: 36px;
+  background: #0f172a;
+  border: 2px solid #38bdf8;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #38bdf8;
+  font-weight: bold;
+  font-size: 14px;
+  user-select: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+.bhoomi-swipe-badge {
+  position: absolute;
+  top: 15px;
+  padding: 6px 14px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+  z-index: 999;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+.bhoomi-badge-before { left: 60px; border-left: 3px solid #ef4444; }
+.bhoomi-badge-after { right: 20px; border-right: 3px solid #22c55e; }
