@@ -8,16 +8,17 @@ function App() {
   const [baseMapType, setBaseMapType] = useState('satellite');
   const [aiDetectedCount, setAiDetectedCount] = useState(0);
 
-  // Adjudication modal
+  // Layer Visibility & Opacity
+  const [showCadastral, setShowCadastral] = useState(true);
+  const [showGeoAI, setShowGeoAI] = useState(true);
+  const [polygonOpacity, setPolygonOpacity] = useState(0.4);
+
+  // Modals
   const [selectedParcel, setSelectedParcel] = useState(null);
   const [resolutionAction, setResolutionAction] = useState('TRIM_OVERLAP_BOUNDARY');
   const [auditNotes, setAuditNotes] = useState('Ground survey matched cadastral markers. Boundary overlap clipped.');
-
-  // Audit history modal
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
-
-  // Digital Certificate modal
   const [certificateParcel, setCertificateParcel] = useState(null);
 
   const mapRef = useRef(null);
@@ -42,7 +43,7 @@ function App() {
           style: (feature) => ({
             color: feature.properties.color || '#3b82f6',
             weight: 3,
-            fillOpacity: 0.4
+            fillOpacity: polygonOpacity
           }),
           onEachFeature: (feature, layer) => {
             layer.bindPopup(`
@@ -53,8 +54,9 @@ function App() {
               <b>Confidence:</b> ${feature.properties.confidence_score}
             `);
           }
-        }).addTo(mapRef.current);
+        });
 
+        if (showCadastral) cadastralLayerRef.current.addTo(mapRef.current);
         mapRef.current.fitBounds(cadastralLayerRef.current.getBounds(), { padding: [60, 60] });
       }
       setLoading(false);
@@ -63,6 +65,37 @@ function App() {
       setLoading(false);
     }
   };
+
+  // Dynamic Opacity adjustment
+  useEffect(() => {
+    if (cadastralLayerRef.current) {
+      cadastralLayerRef.current.eachLayer((layer) => {
+        layer.setStyle({ fillOpacity: polygonOpacity });
+      });
+    }
+  }, [polygonOpacity]);
+
+  // Toggle Cadastral visibility
+  useEffect(() => {
+    if (mapRef.current && cadastralLayerRef.current) {
+      if (showCadastral) {
+        mapRef.current.addLayer(cadastralLayerRef.current);
+      } else {
+        mapRef.current.removeLayer(cadastralLayerRef.current);
+      }
+    }
+  }, [showCadastral]);
+
+  // Toggle GeoAI visibility
+  useEffect(() => {
+    if (mapRef.current && aiFootprintLayerRef.current) {
+      if (showGeoAI) {
+        mapRef.current.addLayer(aiFootprintLayerRef.current);
+      } else {
+        mapRef.current.removeLayer(aiFootprintLayerRef.current);
+      }
+    }
+  }, [showGeoAI]);
 
   const runGeoAIExtraction = async () => {
     try {
@@ -74,7 +107,8 @@ function App() {
         if (aiFootprintLayerRef.current) mapRef.current.removeLayer(aiFootprintLayerRef.current);
         aiFootprintLayerRef.current = L.geoJSON(footprints, {
           style: { color: '#06b6d4', weight: 2, dashArray: '5, 5', fillOpacity: 0.35 }
-        }).addTo(mapRef.current);
+        });
+        if (showGeoAI) aiFootprintLayerRef.current.addTo(mapRef.current);
       }
       alert(`GeoAI Complete: ${footprints.features.length} building footprints detected.`);
     } catch (err) {
@@ -227,13 +261,37 @@ function App() {
         </div>
       </div>
 
-      {/* Main Grid */}
+      {/* Main Layout */}
       <div style={{ display: 'flex', padding: '0 24px 24px', gap: '20px' }}>
-        <div style={{ flex: 2, background: '#1e293b', borderRadius: '8px', overflow: 'hidden', border: '1px solid #334155' }}>
-          <div style={{ padding: '10px 16px', background: '#334155', fontSize: '13px', display: 'flex', justifyContent: 'space-between' }}>
-            <span>🗺️ Spatial Cadastral Overlay</span>
-            <span><b style={{ color: '#ef4444' }}>■</b> Conflict | <b style={{ color: '#22c55e' }}>■</b> Synchronized | <b style={{ color: '#06b6d4' }}>- -</b> GeoAI Footprint</span>
+        <div style={{ flex: 2, background: '#1e293b', borderRadius: '8px', overflow: 'hidden', border: '1px solid #334155', display: 'flex', flexDirection: 'column' }}>
+          
+          {/* Interactive GIS Control Toolbar */}
+          <div style={{ padding: '8px 16px', background: '#334155', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={showCadastral} onChange={(e) => setShowCadastral(e.target.checked)} />
+                Cadastral Layer
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={showGeoAI} onChange={(e) => setShowGeoAI(e.target.checked)} />
+                GeoAI Drone Layer
+              </label>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>Opacity:</span>
+              <input
+                type="range"
+                min="0.0"
+                max="1.0"
+                step="0.05"
+                value={polygonOpacity}
+                onChange={(e) => setPolygonOpacity(parseFloat(e.target.value))}
+                style={{ width: '90px', cursor: 'pointer' }}
+              />
+              <span style={{ fontFamily: 'monospace' }}>{(polygonOpacity * 100).toFixed(0)}%</span>
+            </div>
           </div>
+
           <div id="map-container" style={{ height: '520px' }}></div>
         </div>
 
@@ -356,7 +414,7 @@ function App() {
         </div>
       )}
 
-      {/* Digital Land Ownership Certificate Modal */}
+      {/* Digital Certificate Modal */}
       {certificateParcel && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <div style={{ background: '#ffffff', color: '#0f172a', borderRadius: '8px', padding: '32px', width: '580px', maxWidth: '95%', border: '4px double #0f172a', position: 'relative' }}>
