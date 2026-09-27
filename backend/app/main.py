@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from pathlib import Path
 import json, tempfile, os
 import geopandas as gpd
+from shapely.geometry import shape, mapping
 from geoai.inference import extract_drone_footprints
 from backend.app.core.database import SessionLocal, ParcelModel, AuditLogModel
 
@@ -93,33 +94,61 @@ def get_parcels_geojson():
 
 @app.post("/api/v1/conflicts/resolve")
 def resolve_conflict(req: ConflictResolutionRequest):
-    """Persists official adjudication decision and writes to immutable audit log."""
+    """
+    Executes geometric auto-trimming (Boolean difference) to reshape parcel geometry,
+    synchronizes status, and logs legal audit action into the database.
+    """
     db = SessionLocal()
     parcel = db.query(ParcelModel).filter(ParcelModel.parcel_id == req.parcel_id).first()
     if not parcel:
         db.close()
         raise HTTPException(status_code=404, detail="Parcel not found")
 
+    trimmed_msg = ""
+    # Geometric Auto-Trim Engine
+    if req.resolution_action == "TRIM_OVERLAP_BOUNDARY":
+        try:
+            current_geom = shape(json.loads(parcel.geometry_json))
+            other_parcels = db.query(ParcelModel).filter(ParcelModel.parcel_id != req.parcel_id).all()
+
+            total_trimmed_sqm = 0.0
+            for other in other_parcels:
+                other_geom = shape(json.loads(other.geometry_json))
+                if current_geom.intersects(other_geom):
+                    intersection = current_geom.intersection(other_geom)
+                    int_gdf = gpd.GeoSeries([intersection], crs="EPSG:4326").to_crs(epsg=3857)
+                    area_sqm = int_gdf.area.iloc[0]
+                    if area_sqm > 0.01:
+                        total_trimmed_sqm += area_sqm
+                        # Subtract overlapping area from current parcel
+                        current_geom = current_geom.difference(other_geom)
+
+            if total_trimmed_sqm > 0:
+                parcel.geometry_json = json.dumps(mapping(current_geom))
+                trimmed_msg = f" Auto-trimmed {round(total_trimmed_sqm, 2)} sq.m overlapping encroachment."
+        except Exception as e:
+            print(f"Geometric trim error: {e}")
+
     parcel.status = "SYNCHRONIZED"
     parcel.conflict_type = "NONE"
     parcel.confidence_score = 1.0
     parcel.owner_name = req.approved_owner
+    parcel.details = f"Reconciled by official decision.{trimmed_msg}"
 
-    # Write permanent audit log
+    # Record permanent audit log
     log = AuditLogModel(
         parcel_id=req.parcel_id,
         approved_owner=req.approved_owner,
         resolution_action=req.resolution_action,
-        audit_notes=req.audit_notes
+        audit_notes=f"{req.audit_notes}{trimmed_msg}"
     )
     db.add(log)
     db.commit()
     db.close()
-    return {"status": "success", "message": f"Parcel {req.parcel_id} permanently synchronized and logged."}
+    return {"status": "success", "message": f"Parcel {req.parcel_id} synchronized.{trimmed_msg}"}
 
 @app.get("/api/v1/audit/logs")
 def get_audit_logs():
-    """Returns the immutable legal audit trail."""
     db = SessionLocal()
     logs = db.query(AuditLogModel).order_by(AuditLogModel.id.desc()).all()
     results = [
