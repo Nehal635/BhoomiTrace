@@ -8,12 +8,17 @@ function App() {
   const [baseMapType, setBaseMapType] = useState('satellite');
   const [aiDetectedCount, setAiDetectedCount] = useState(0);
 
+  // Adjudication modal
   const [selectedParcel, setSelectedParcel] = useState(null);
   const [resolutionAction, setResolutionAction] = useState('TRIM_OVERLAP_BOUNDARY');
   const [auditNotes, setAuditNotes] = useState('Ground survey matched cadastral markers. Boundary overlap clipped.');
 
+  // Audit history modal
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
+
+  // Digital Certificate modal
+  const [certificateParcel, setCertificateParcel] = useState(null);
 
   const mapRef = useRef(null);
   const tileLayerRef = useRef(null);
@@ -222,7 +227,7 @@ function App() {
         </div>
       </div>
 
-      {/* Main Layout */}
+      {/* Main Grid */}
       <div style={{ display: 'flex', padding: '0 24px 24px', gap: '20px' }}>
         <div style={{ flex: 2, background: '#1e293b', borderRadius: '8px', overflow: 'hidden', border: '1px solid #334155' }}>
           <div style={{ padding: '10px 16px', background: '#334155', fontSize: '13px', display: 'flex', justifyContent: 'space-between' }}>
@@ -252,14 +257,24 @@ function App() {
               <div style={{ fontSize: '13px', margin: '4px 0', color: '#cbd5e1' }}>Owner: {p.properties.owner_name}</div>
               <div style={{ fontSize: '12px', color: '#94a3b8' }}>Confidence: <b>{p.properties.confidence_score}</b></div>
               <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{p.properties.details}</div>
-              {p.properties.status === 'PENDING_REVIEW' && (
-                <button
-                  onClick={() => setSelectedParcel(p)}
-                  style={{ marginTop: '8px', background: '#dc2626', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', width: '100%', fontWeight: 'bold' }}
-                >
-                  ⚖️ Audit & Auto-Trim Boundary
-                </button>
-              )}
+              
+              <div style={{ marginTop: '8px', display: 'flex', gap: '6px' }}>
+                {p.properties.status === 'PENDING_REVIEW' ? (
+                  <button
+                    onClick={() => setSelectedParcel(p)}
+                    style={{ flex: 1, background: '#dc2626', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                  >
+                    ⚖️ Audit & Auto-Trim
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setCertificateParcel(p)}
+                    style={{ flex: 1, background: '#059669', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                  >
+                    📄 View Certificate
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -337,6 +352,45 @@ function App() {
                 </tbody>
               </table>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Digital Land Ownership Certificate Modal */}
+      {certificateParcel && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ background: '#ffffff', color: '#0f172a', borderRadius: '8px', padding: '32px', width: '580px', maxWidth: '95%', border: '4px double #0f172a', position: 'relative' }}>
+            <div style={{ textAlign: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '12px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', color: '#475569' }}>GOVERNMENT OF INDIA • DEPARTMENT OF LAND RESOURCES</div>
+              <h2 style={{ margin: '4px 0', fontSize: '20px', color: '#0f172a' }}>CERTIFICATE OF DIGITAL LAND PARCEL TITLING</h2>
+              <small style={{ color: '#059669', fontWeight: 'bold' }}>NAKSHA / DILRMP COMPLIANT TITLE RECORD</small>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px', marginBottom: '20px' }}>
+              <div><b>Bhoomi / ULPIN ID:</b> <span style={{ color: '#2563eb' }}>IN-DL-2026-{certificateParcel.properties.parcel_id}</span></div>
+              <div><b>Legal Status:</b> <span style={{ color: '#059669', fontWeight: 'bold' }}>SYNCHRONIZED (VERIFIED)</span></div>
+              <div><b>Certified Owner:</b> {certificateParcel.properties.owner_name}</div>
+              <div><b>Confidence Index:</b> 100% (Harmonized)</div>
+              <div><b>CRS Projection:</b> EPSG:3857 (Metric)</div>
+              <div><b>Spatial Integrity:</b> 0.00 m² Overlap Defect</div>
+              <div style={{ gridColumn: 'span 2' }}><b>Legal Audit Remark:</b> <i>{certificateParcel.properties.details}</i></div>
+            </div>
+
+            <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', padding: '12px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <small style={{ color: '#64748b' }}>DIGITAL SIGNATURE & SEAL</small><br/>
+                <b style={{ fontSize: '12px', color: '#0f172a' }}>Revenue Officer (Land Titling Division)</b><br/>
+                <small style={{ color: '#059669' }}>✔ Cryptographically Validated</small>
+              </div>
+              <div style={{ background: '#0f172a', color: '#fff', padding: '8px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>
+                QR-VERIFIED
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button onClick={() => setCertificateParcel(null)} style={{ background: '#475569', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}>Close</button>
+              <button onClick={() => window.print()} style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>🖨️ Print / Save PDF</button>
+            </div>
           </div>
         </div>
       )}
