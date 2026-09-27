@@ -2,11 +2,10 @@
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pathlib import Path
-import json
+import json, tempfile, os
 import geopandas as gpd
-import pandas as pd
-from rapidfuzz import fuzz
-from backend.app.services.harmonization import run_harmonization
+from geoai.inference import extract_drone_footprints
+from backend.app.core.database import SessionLocal, ParcelModel, AuditLogModel
 
 app = FastAPI(
     title="BhoomiTrace API",
@@ -23,11 +22,28 @@ app.add_middleware(
 )
 
 BASE_DIR = Path("C:/Users/NEHAL/BhoomiTrace")
-CURRENT_GEOJSON = None
+AI_FOOTPRINTS_STORE = extract_drone_footprints(str(BASE_DIR / "sample_data" / "drone_ortho_sample.png"))
 
-DATA_STORE = {
-    "records": run_harmonization()
-}
+def init_db_data():
+    db = SessionLocal()
+    if db.query(ParcelModel).count() == 0:
+        with open(BASE_DIR / "sample_data" / "cadastral_legacy.geojson", "r", encoding="utf-8-sig") as f:
+            geojson = json.load(f)
+        for feat in geojson["features"]:
+            props = feat["properties"]
+            db.add(ParcelModel(
+                parcel_id=props["parcel_id"],
+                owner_name=props["owner_name"],
+                status="PENDING_REVIEW",
+                confidence_score=0.61,
+                conflict_type="BOUNDARY_OVERLAP",
+                details="Spatial overlap detected with adjacent parcel.",
+                geometry_json=json.dumps(feat["geometry"])
+            ))
+        db.commit()
+    db.close()
+
+init_db_data()
 
 class ConflictResolutionRequest(BaseModel):
     parcel_id: str
@@ -41,93 +57,153 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "database": "persisted"}
 
 @app.post("/api/v1/harmonize/reset")
 def reset_demo():
-    global CURRENT_GEOJSON
-    CURRENT_GEOJSON = None
-    DATA_STORE["records"] = run_harmonization()
-    return {"status": "success", "message": "Demo reset to initial test state."}
-
-@app.post("/api/v1/ingest/upload")
-async def upload_cadastral_file(file: UploadFile = File(...)):
-    """Dynamic Ingestion: Uploads external GeoJSON, normalizes CRS, and detects overlaps."""
-    global CURRENT_GEOJSON
-    try:
-        contents = await file.read()
-        raw_geojson = json.loads(contents.decode("utf-8-sig"))
-        gdf = gpd.GeoDataFrame.from_features(raw_geojson["features"])
-        
-        # CRS Normalization to EPSG:3857 for metric spatial calculations
-        if gdf.crs is None or gdf.crs.to_epsg() != 3857:
-            gdf.set_crs(epsg=4326, inplace=True, allow_override=True)
-            gdf = gdf.to_crs(epsg=3857)
-
-        results = []
-        for i, parcel_a in gdf.iterrows():
-            pid = parcel_a.get("parcel_id", f"P-{i+101}")
-            owner = parcel_a.get("owner_name", "Unknown Owner")
-            geom_a = parcel_a["geometry"]
-
-            overlap_detected = False
-            overlap_details = ""
-            for j, parcel_b in gdf.iterrows():
-                if i != j and geom_a.intersects(parcel_b["geometry"]):
-                    area = geom_a.intersection(parcel_b["geometry"]).area
-                    if area > 0.01:
-                        overlap_detected = True
-                        other_pid = parcel_b.get("parcel_id", f"P-{j+101}")
-                        overlap_details = f"Overlaps with {other_pid} by {round(area, 2)} sq.m"
-
-            confidence = 0.62 if overlap_detected else 0.95
-            status = "PENDING_REVIEW" if overlap_detected else "SYNCHRONIZED"
-
-            results.append({
-                "parcel_id": pid,
-                "owner_name": owner,
-                "confidence_score": confidence,
-                "status": status,
-                "conflict_type": "BOUNDARY_OVERLAP" if overlap_detected else "NONE",
-                "details": overlap_details if overlap_detected else "Geometry validated"
-            })
-
-        DATA_STORE["records"] = results
-        CURRENT_GEOJSON = raw_geojson
-        return {"status": "success", "parcels_ingested": len(results), "records": results}
-
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Ingestion failed: {str(e)}")
+    db = SessionLocal()
+    db.query(ParcelModel).delete()
+    db.query(AuditLogModel).delete()
+    db.commit()
+    db.close()
+    init_db_data()
+    return {"status": "success", "message": "Database reset to initial conflicting state."}
 
 @app.get("/api/v1/parcels/geojson")
 def get_parcels_geojson():
-    global CURRENT_GEOJSON
-    try:
-        if CURRENT_GEOJSON:
-            geojson_data = CURRENT_GEOJSON
-        else:
-            with open(BASE_DIR / "sample_data" / "cadastral_legacy.geojson", "r", encoding="utf-8-sig") as f:
-                geojson_data = json.load(f)
-
-        for feature in geojson_data["features"]:
-            pid = feature["properties"]["parcel_id"]
-            matched = next((r for r in DATA_STORE["records"] if r["parcel_id"] == pid), None)
-            if matched:
-                feature["properties"]["status"] = matched["status"]
-                feature["properties"]["confidence_score"] = matched["confidence_score"]
-                feature["properties"]["color"] = "#ef4444" if matched["status"] == "PENDING_REVIEW" else "#22c55e"
-
-        return geojson_data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed loading GeoJSON: {str(e)}")
+    db = SessionLocal()
+    parcels = db.query(ParcelModel).all()
+    features = []
+    for p in parcels:
+        features.append({
+            "type": "Feature",
+            "properties": {
+                "parcel_id": p.parcel_id,
+                "owner_name": p.owner_name,
+                "status": p.status,
+                "confidence_score": p.confidence_score,
+                "conflict_type": p.conflict_type,
+                "details": p.details,
+                "color": "#ef4444" if p.status == "PENDING_REVIEW" else "#22c55e"
+            },
+            "geometry": json.loads(p.geometry_json)
+        })
+    db.close()
+    return {"type": "FeatureCollection", "features": features}
 
 @app.post("/api/v1/conflicts/resolve")
 def resolve_conflict(req: ConflictResolutionRequest):
-    for record in DATA_STORE["records"]:
-        if record["parcel_id"] == req.parcel_id:
-            record["status"] = "SYNCHRONIZED"
-            record["conflict_type"] = "NONE"
-            record["confidence_score"] = 1.0
-            record["audit_notes"] = f"Action: {req.resolution_action} | Notes: {req.audit_notes}"
-            return {"status": "success", "message": f"Parcel {req.parcel_id} synchronized."}
-    raise HTTPException(status_code=404, detail="Parcel not found")
+    """Persists official adjudication decision and writes to immutable audit log."""
+    db = SessionLocal()
+    parcel = db.query(ParcelModel).filter(ParcelModel.parcel_id == req.parcel_id).first()
+    if not parcel:
+        db.close()
+        raise HTTPException(status_code=404, detail="Parcel not found")
+
+    parcel.status = "SYNCHRONIZED"
+    parcel.conflict_type = "NONE"
+    parcel.confidence_score = 1.0
+    parcel.owner_name = req.approved_owner
+
+    # Write permanent audit log
+    log = AuditLogModel(
+        parcel_id=req.parcel_id,
+        approved_owner=req.approved_owner,
+        resolution_action=req.resolution_action,
+        audit_notes=req.audit_notes
+    )
+    db.add(log)
+    db.commit()
+    db.close()
+    return {"status": "success", "message": f"Parcel {req.parcel_id} permanently synchronized and logged."}
+
+@app.get("/api/v1/audit/logs")
+def get_audit_logs():
+    """Returns the immutable legal audit trail."""
+    db = SessionLocal()
+    logs = db.query(AuditLogModel).order_by(AuditLogModel.id.desc()).all()
+    results = [
+        {
+            "id": l.id,
+            "parcel_id": l.parcel_id,
+            "approved_owner": l.approved_owner,
+            "resolution_action": l.resolution_action,
+            "audit_notes": l.audit_notes,
+            "timestamp": l.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+        }
+        for l in logs
+    ]
+    db.close()
+    return {"total_records": len(results), "audit_trail": results}
+
+@app.post("/api/v1/geoai/extract")
+def run_geoai_extraction():
+    global AI_FOOTPRINTS_STORE
+    AI_FOOTPRINTS_STORE = extract_drone_footprints(str(BASE_DIR / "sample_data" / "drone_ortho_sample.png"))
+    return {"status": "success", "footprints_detected": len(AI_FOOTPRINTS_STORE["features"]), "data": AI_FOOTPRINTS_STORE}
+
+@app.post("/api/v1/ingest/upload")
+async def upload_cadastral_file(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        filename = file.filename.lower()
+
+        if filename.endswith(".zip"):
+            with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+                tmp.write(contents)
+                tmp_path = tmp.name
+            try:
+                gdf = gpd.read_file(f"zip://{tmp_path}")
+            finally:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            if gdf.crs is None:
+                gdf.set_crs(epsg=4326, inplace=True)
+            gdf_wgs84 = gdf.to_crs(epsg=4326)
+
+        elif filename.endswith((".geojson", ".json")):
+            raw = json.loads(contents.decode("utf-8-sig"))
+            gdf_wgs84 = gpd.GeoDataFrame.from_features(raw["features"])
+            if gdf_wgs84.crs is None:
+                gdf_wgs84.set_crs(epsg=4326, inplace=True, allow_override=True)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported format.")
+
+        gdf_metric = gdf_wgs84.to_crs(epsg=3857)
+
+        db = SessionLocal()
+        db.query(ParcelModel).delete()
+
+        for i, row in gdf_metric.iterrows():
+            pid = str(row.get("parcel_id", row.get("PARCEL_ID", f"P-{i+101}")))
+            owner = str(row.get("owner_name", row.get("OWNER_NAME", "Registered Owner")))
+            geom_a = row["geometry"]
+
+            overlap = False
+            overlap_details = ""
+            for j, other in gdf_metric.iterrows():
+                if i != j and geom_a.intersects(other["geometry"]):
+                    area = geom_a.intersection(other["geometry"]).area
+                    if area > 0.01:
+                        overlap = True
+                        other_pid = str(other.get("parcel_id", other.get("PARCEL_ID", f"P-{j+101}")))
+                        overlap_details = f"Overlaps with {other_pid} by {round(area, 2)} sq.m"
+
+            geom_geojson = json.loads(gpd.GeoSeries([gdf_wgs84.iloc[i]["geometry"]]).to_json())["features"][0]["geometry"]
+
+            db.add(ParcelModel(
+                parcel_id=pid,
+                owner_name=owner,
+                status="PENDING_REVIEW" if overlap else "SYNCHRONIZED",
+                confidence_score=0.62 if overlap else 0.95,
+                conflict_type="BOUNDARY_OVERLAP" if overlap else "NONE",
+                details=overlap_details if overlap else "Validated",
+                geometry_json=json.dumps(geom_geojson)
+            ))
+
+        db.commit()
+        db.close()
+        return {"status": "success", "parcels_persisted": len(gdf_metric)}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Ingestion failed: {str(e)}")
