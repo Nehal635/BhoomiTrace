@@ -357,7 +357,11 @@ function App() {
     });
 
     if (showCadastral) cadastralLayerRef.current.addTo(mapRef.current);
-    mapRef.current.fitBounds(cadastralLayerRef.current.getBounds(), { padding: [60, 60] });
+   // SAFE BOUNDS CHECK: Prevents "Bounds are not valid" crash
+    const bounds = cadastralLayerRef.current.getBounds();
+    if (bounds && bounds.isValid()) {
+      mapRef.current.fitBounds(bounds, { padding: [60, 60] });
+    }
   };
 
   const fetchParcels = async () => {
@@ -385,21 +389,9 @@ function App() {
     if (!mapRef.current) return;
     const map = mapRef.current;
 
-    const greenData = {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          properties: { parcel_id: "P-101", owner_name: "Rajesh Kumar", status: "SYNCHRONIZED", color: "#10b981", confidence_score: 0.98 },
-          geometry: { type: "Polygon", coordinates: [[[77.2090, 28.6139], [77.2095, 28.6139], [77.2095, 28.6144], [77.2090, 28.6144], [77.2090, 28.6139]]] }
-        },
-        {
-          type: "Feature",
-          properties: { parcel_id: "P-102", owner_name: "Sunita Verma", status: "SYNCHRONIZED", color: "#10b981", confidence_score: 0.98 },
-          geometry: { type: "Polygon", coordinates: [[[77.2095, 28.6139], [77.2100, 28.6139], [77.2100, 28.6144], [77.2095, 28.6144], [77.2095, 28.6139]]] }
-        }
-      ]
-    };
+    // Dynamically use whatever dataset is currently active (5 Wards or P-101/P-102):
+    const bFeatures = (beforeParcels && beforeParcels.length > 0) ? beforeParcels : rawLegacyData.features;
+    const aFeatures = (parcels && parcels.length > 0) ? parcels : bFeatures;
 
     if (nextSwipe) {
       if (!map.getPane('beforeSwipePane')) {
@@ -414,14 +406,14 @@ function App() {
       if (legacyLayerRef.current) map.removeLayer(legacyLayerRef.current);
       if (cadastralLayerRef.current) map.removeLayer(cadastralLayerRef.current);
 
-      // LEFT: Red
-      legacyLayerRef.current = L.geoJSON(rawLegacyData, {
+      // LEFT SIDE: Shows the Red Before state of the current dataset
+      legacyLayerRef.current = L.geoJSON({ type: "FeatureCollection", features: bFeatures }, {
         pane: 'beforeSwipePane',
         style: () => ({ color: '#ef4444', fillColor: '#ef4444', weight: 3, fillOpacity: 0.65 })
       }).addTo(map);
 
-      // RIGHT: Green
-      cadastralLayerRef.current = L.geoJSON(greenData, {
+      // RIGHT SIDE: Shows the Green After state of the current dataset
+      cadastralLayerRef.current = L.geoJSON({ type: "FeatureCollection", features: aFeatures }, {
         pane: 'afterSwipePane',
         style: () => ({ color: '#10b981', fillColor: '#10b981', weight: 3, fillOpacity: 0.65 })
       }).addTo(map);
@@ -437,7 +429,7 @@ function App() {
       const ap = map.getPane('afterSwipePane');
       if (ap) { ap.style.clipPath = 'none'; ap.style.webkitClipPath = 'none'; }
 
-      fetchParcels();
+      renderGeoJSONLayer({ type: 'FeatureCollection', features: aFeatures });
     }
   };
   const updateClip = (percent) => {
@@ -485,11 +477,11 @@ function App() {
     setViewMode(nextMode);
 
     if (nextMode === 'before') {
-      // Shows the uploaded wards in their original pre-audit state:
-      renderGeoJSONLayer({ type: 'FeatureCollection', features: beforeParcels });
+      const bFeatures = (beforeParcels && beforeParcels.length > 0) ? beforeParcels : rawLegacyData.features;
+      renderGeoJSONLayer({ type: 'FeatureCollection', features: bFeatures });
     } else {
-      // Shows the harmonized green parcels:
-      renderGeoJSONLayer({ type: 'FeatureCollection', features: parcels });
+      const aFeatures = (parcels && parcels.length > 0) ? parcels : rawLegacyData.features;
+      renderGeoJSONLayer({ type: 'FeatureCollection', features: aFeatures });
     }
   };
 
