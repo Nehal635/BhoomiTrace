@@ -6,7 +6,7 @@
     {
       "type": "Feature",
       "properties": { "parcel_id": "WARD-101", "owner_name": "Aarav Sharma", "area_sqm": 220.0 },
-      "geometry": { "type": "Polygon", "coordinates": [[[77.2085, 28.6135], [77.2090, 28.6135], [77.2090, 28.6140], [77.2085, 28.6140], [77.2085, 28.6135]]] }
+    "geometry": { "type": "Polygon", "coordinates": [[[77.2085, 28.6135], [77.2092, 28.6135], [77.2092, 28.6140], [77.2085, 28.6140], [77.2085, 28.6135]]] }
     },
     {
       "type": "Feature",
