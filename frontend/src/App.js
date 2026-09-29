@@ -237,6 +237,7 @@ function App() {
   const t = translations[lang] || translations.en;
 
   const [parcels, setParcels] = useState([]);
+  const [beforeParcels, setBeforeParcels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [baseMapType, setBaseMapType] = useState('satellite');
   const [aiDetectedCount, setAiDetectedCount] = useState(3);
@@ -371,60 +372,99 @@ function App() {
       console.warn("Backend offline, loading local demo parcels...");
       // Auto-fallback so the queue is NEVER blank:
       setParcels(rawLegacyData.features);
+      setBeforeParcels(rawLegacyData.features);
       renderGeoJSONLayer(rawLegacyData);
       setLoading(false);
     }
   };
 
-  const toggleSwipeMode = () => {
+ const toggleSwipeMode = () => {
     const nextSwipe = !isSwipeMode;
     setIsSwipeMode(nextSwipe);
 
     if (!mapRef.current) return;
     const map = mapRef.current;
 
+    const greenData = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { parcel_id: "P-101", owner_name: "Rajesh Kumar", status: "SYNCHRONIZED", color: "#10b981", confidence_score: 0.98 },
+          geometry: { type: "Polygon", coordinates: [[[77.2090, 28.6139], [77.2095, 28.6139], [77.2095, 28.6144], [77.2090, 28.6144], [77.2090, 28.6139]]] }
+        },
+        {
+          type: "Feature",
+          properties: { parcel_id: "P-102", owner_name: "Sunita Verma", status: "SYNCHRONIZED", color: "#10b981", confidence_score: 0.98 },
+          geometry: { type: "Polygon", coordinates: [[[77.2095, 28.6139], [77.2100, 28.6139], [77.2100, 28.6144], [77.2095, 28.6144], [77.2095, 28.6139]]] }
+        }
+      ]
+    };
+
     if (nextSwipe) {
+      if (!map.getPane('beforeSwipePane')) {
+        const bp = map.createPane('beforeSwipePane');
+        bp.style.zIndex = '440';
+      }
       if (!map.getPane('afterSwipePane')) {
-        const pane = map.createPane('afterSwipePane');
-        pane.style.zIndex = '450';
+        const ap = map.createPane('afterSwipePane');
+        ap.style.zIndex = '450';
       }
 
       if (legacyLayerRef.current) map.removeLayer(legacyLayerRef.current);
+      if (cadastralLayerRef.current) map.removeLayer(cadastralLayerRef.current);
+
+      // LEFT: Red
       legacyLayerRef.current = L.geoJSON(rawLegacyData, {
-        style: () => ({
-          color: '#ef4444',
-          fillColor: '#ef4444',
-          weight: 3,
-          fillOpacity: 0.5
-        })
+        pane: 'beforeSwipePane',
+        style: () => ({ color: '#ef4444', fillColor: '#ef4444', weight: 3, fillOpacity: 0.65 })
       }).addTo(map);
 
-      renderGeoJSONLayer({ type: 'FeatureCollection', features: parcels }, 'afterSwipePane');
+      // RIGHT: Green
+      cadastralLayerRef.current = L.geoJSON(greenData, {
+        pane: 'afterSwipePane',
+        style: () => ({ color: '#10b981', fillColor: '#10b981', weight: 3, fillOpacity: 0.65 })
+      }).addTo(map);
+
       updateClip(swipePos);
     } else {
       if (legacyLayerRef.current) {
         map.removeLayer(legacyLayerRef.current);
         legacyLayerRef.current = null;
       }
-      const pane = map.getPane('afterSwipePane');
-      if (pane) pane.style.clipPath = 'none';
+      const bp = map.getPane('beforeSwipePane');
+      if (bp) { bp.style.clipPath = 'none'; bp.style.webkitClipPath = 'none'; }
+      const ap = map.getPane('afterSwipePane');
+      if (ap) { ap.style.clipPath = 'none'; ap.style.webkitClipPath = 'none'; }
 
-      if (viewMode === 'after') {
-        fetchParcels();
-      } else {
-        renderGeoJSONLayer(rawLegacyData);
-      }
+      fetchParcels();
     }
   };
-
   const updateClip = (percent) => {
-    if (!mapRef.current) return;
-    const pane = mapRef.current.getPane('afterSwipePane');
-    if (!pane || !mapContainerRef.current) return;
-
-    const width = mapContainerRef.current.offsetWidth;
+    if (!mapRef.current || !mapContainerRef.current) return;
+    const width = mapContainerRef.current.offsetWidth || 800;
+    const height = mapContainerRef.current.offsetHeight || 520;
     const splitX = (width * percent) / 100;
-    pane.style.clipPath = `polygon(${splitX}px 0, 100% 0, 100% 100%, ${splitX}px 100%)`;
+
+    // 1. LEFT PANE: Full-height rectangle from 0px to splitX
+    const beforePane = mapRef.current.getPane('beforeSwipePane');
+    if (beforePane) {
+      beforePane.style.width = `${width}px`;
+      beforePane.style.height = `${height}px`;
+      const leftClip = `polygon(0px 0px, ${splitX}px 0px, ${splitX}px ${height}px, 0px ${height}px)`;
+      beforePane.style.clipPath = leftClip;
+      beforePane.style.webkitClipPath = leftClip;
+    }
+
+    // 2. RIGHT PANE: Full-height rectangle from splitX to width
+    const afterPane = mapRef.current.getPane('afterSwipePane');
+    if (afterPane) {
+      afterPane.style.width = `${width}px`;
+      afterPane.style.height = `${height}px`;
+      const rightClip = `polygon(${splitX}px 0px, ${width}px 0px, ${width}px ${height}px, ${splitX}px ${height}px)`;
+      afterPane.style.clipPath = rightClip;
+      afterPane.style.webkitClipPath = rightClip;
+    }
   };
 
   const handleMouseDown = () => { isDraggingRef.current = true; };
@@ -439,14 +479,17 @@ function App() {
     updateClip(percent);
   };
 
-  const toggleViewMode = () => {
+ const toggleViewMode = () => {
     if (isSwipeMode) setIsSwipeMode(false);
     const nextMode = viewMode === 'after' ? 'before' : 'after';
     setViewMode(nextMode);
+
     if (nextMode === 'before') {
-      renderGeoJSONLayer(rawLegacyData);
+      // Shows the uploaded wards in their original pre-audit state:
+      renderGeoJSONLayer({ type: 'FeatureCollection', features: beforeParcels });
     } else {
-      fetchParcels();
+      // Shows the harmonized green parcels:
+      renderGeoJSONLayer({ type: 'FeatureCollection', features: parcels });
     }
   };
 
@@ -860,10 +903,22 @@ const updateLegacyMapOverlay = (bounds) => {
       try {
         const geojson = JSON.parse(e.target.result);
         if (geojson && geojson.features) {
-          setParcels(geojson.features);
-          renderGeoJSONLayer(geojson);
-          alert(`✔ File "${file.name}" loaded successfully (${geojson.features.length} parcels)!`);
-        } else {
+        const enrichedFeatures = geojson.features.map((f) => ({
+          ...f,
+          properties: {
+            status: f.properties.status || 'PENDING_REVIEW',
+            confidence_score: f.properties.confidence_score || 0.61,
+            details: f.properties.details || 'Spatial overlap detected with adjacent parcel.',
+            color: f.properties.color || '#ef4444',
+            ...f.properties
+          }
+        }));
+
+        setParcels(enrichedFeatures);
+        setBeforeParcels(enrichedFeatures); // 👈 Stores original disputed wards for "Before" view
+        renderGeoJSONLayer({ ...geojson, features: enrichedFeatures });
+        alert(`✔ File "${file.name}" loaded successfully (${enrichedFeatures.length} parcels)!`);
+      }else {
           alert("Invalid GeoJSON file format.");
         }
       } catch (err) {
@@ -986,6 +1041,7 @@ const updateLegacyMapOverlay = (bounds) => {
   });
 
   setParcels(updatedFeatures);
+  setViewMode('after');
   if (typeof renderGeoJSONLayer === 'function') {
     renderGeoJSONLayer({ type: 'FeatureCollection', features: updatedFeatures });
   }
@@ -1017,20 +1073,24 @@ const updateLegacyMapOverlay = (bounds) => {
   const handleResetDemo = async () => {
     try {
       await axios.post('http://localhost:8000/api/v1/harmonize/reset');
-      if (aiFootprintLayerRef.current && mapRef.current) {
-        mapRef.current.removeLayer(aiFootprintLayerRef.current);
-        aiFootprintLayerRef.current = null;
-      }
-      clearMeasurements();
-      clearVertexMarkers();
-      setEditingParcelId(null);
-      setAiDetectedCount(0);
-      fetchParcels();
-    } catch (err) {
-      alert("Reset failed: " + err.message);
+    } catch (e) {
+      console.log("Resetting local demo state.");
     }
+    if (aiFootprintLayerRef.current && mapRef.current) {
+      mapRef.current.removeLayer(aiFootprintLayerRef.current);
+      aiFootprintLayerRef.current = null;
+    }
+    clearMeasurements();
+    clearVertexMarkers();
+    setEditingParcelId(null);
+    setAiDetectedCount(0);
+    
+    // Set view mode to 'before' so labels match the red state:
+    setViewMode('before');
+    setParcels(rawLegacyData.features);
+    setBeforeParcels(rawLegacyData.features);
+    renderGeoJSONLayer(rawLegacyData);
   };
-
   const exportGeoJSON = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(parcels, null, 2));
     const downloadAnchor = document.createElement('a');
@@ -1287,7 +1347,7 @@ const updateLegacyMapOverlay = (bounds) => {
         <div style={{ background: '#1e293b', padding: '12px 16px', borderRadius: '6px', borderLeft: '4px solid #22c55e' }}>
           <small style={{ color: '#94a3b8' }}>{t.synchronized}</small>
           <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#4ade80' }}>
-            {viewMode === 'before' ? "0 / 2" : `${synchronizedCount} / ${parcels.length}`}
+            {viewMode === 'before' ? `0 / ${parcels.length}` : `${synchronizedCount} / ${parcels.length}`}
           </div>
         </div>
         <div style={{ background: '#1e293b', padding: '12px 16px', borderRadius: '6px', borderLeft: '4px solid #ef4444' }}>
@@ -1512,7 +1572,7 @@ const updateLegacyMapOverlay = (bounds) => {
         <div style={{ flex: 1, background: '#1e293b', borderRadius: '8px', border: '1px solid #334155', padding: '16px', maxHeight: '560px', overflowY: 'auto' }}>
           <h3 style={{ margin: '0 0 12px 0', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>{t.conflictQueueTitle}</h3>
           {loading && <p>Connecting to database...</p>}
-          {(viewMode === 'before' ? rawLegacyData.features : parcels).map(p => (
+          {(viewMode === 'before' ? beforeParcels : parcels).map(p => (
             <div key={p.properties.parcel_id} style={{
               border: `1px solid ${p.properties.status === 'SYNCHRONIZED' ? '#166534' : '#991b1b'}`,
               backgroundColor: p.properties.status === 'SYNCHRONIZED' ? 'rgba(22, 101, 52, 0.2)' : 'rgba(153, 27, 27, 0.2)',
