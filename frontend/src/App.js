@@ -243,7 +243,7 @@ function App() {
   const [aiDetectedCount, setAiDetectedCount] = useState(3);
 
   // Before vs After State Toggle
-  const [viewMode, setViewMode] = useState('after');
+  const [viewMode, setViewMode] = useState('before');
 
   // Feature 1: Swipe Compare State
   const [isSwipeMode, setIsSwipeMode] = useState(false);
@@ -873,7 +873,10 @@ const updateLegacyMapOverlay = (bounds) => {
       mapRef.current = map;
       updateLegacyMapOverlay(gcpBounds);
     }
-    fetchParcels();
+    setParcels(rawLegacyData.features);
+    setBeforeParcels(rawLegacyData.features);
+    renderGeoJSONLayer(rawLegacyData);
+    setLoading(false);
   }, []);
 
   const switchBasemap = (type) => {
